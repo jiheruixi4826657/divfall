@@ -7,7 +7,7 @@
  *  最低保底 = 攻擊力 × 技能倍率 × 0.1
  */
 
-import { Game, pauseGame, resumeGame } from './game.js';
+import { Game, pauseGame, resumeGame, worldToScreen } from './game.js';
 import { playSFX } from './bgm.js';
 
 // ════════════════════════════════════════
@@ -35,7 +35,7 @@ function getElementMult(atkEl, defEl) {
 // ════════════════════════════════════════
 export function calcDamage(player, enemy, skillMult = 1.0, atkElement = '物理') {
   const rawDmg  = player.atk * skillMult;
-  const reduced = Math.max(rawDmg * 0.1, rawDmg - enemy.def * 0.5);
+  const reduced = Math.max(rawDmg * 0.1, rawDmg - (enemy.def || 0) * 0.5);
   const elemMul = getElementMult(atkElement, enemy.element);
 
   // 暴擊判定
@@ -50,12 +50,16 @@ export function calcDamage(player, enemy, skillMult = 1.0, atkElement = '物理'
 // 普通攻擊（點擊目標位置，打最近的敵人）
 // ════════════════════════════════════════
 export function performAttack(player, enemies, targetX, targetY) {
-  const nearest = findNearestEnemy(enemies, targetX, targetY, 120);
+  const nearest = findNearestEnemy(enemies, targetX, targetY, 220);
   if (!nearest) return;
+
+  // 面向目標
+  const sd = (nearest.x - player.x) - (nearest.y - player.y);
+  if (Math.abs(sd) > 0.01) player.facing = Math.sign(sd);
 
   const { damage, isCrit } = calcDamage(player, nearest, 1.0, getPlayerElement(player.cls));
   applyDamage(nearest, damage, isCrit);
-  playSFX('hit_light');
+  playSFX(isCrit ? 'crit' : 'hit_light');
 }
 
 // ════════════════════════════════════════
@@ -114,7 +118,8 @@ export function performSkill(player, skillKey, enemies) {
     case 'heal': {
       const amount = player.maxHP * (skillDef.healPct || 0.1);
       player.heal(amount);
-      showDamageNumber(player.x, player.y - 30, `+${Math.floor(amount)}`, false, true);
+      const hs = worldToScreen(player.x, player.y);
+      showDamageNumber(hs.x, hs.y - 70, `+${Math.floor(amount)}`, false, true);
       break;
     }
     case 'burst': {
@@ -136,11 +141,13 @@ export function performSkill(player, skillKey, enemies) {
 // ════════════════════════════════════════
 function applyDamage(enemy, damage, isCrit) {
   enemy.takeDamage(damage);
-  showDamageNumber(enemy.x, enemy.y - enemy.h/2 - 10, damage, isCrit);
+  // enemy.x/y 是世界座標 → 投影成螢幕座標再顯示
+  const s = worldToScreen(enemy.x, enemy.y);
+  showDamageNumber(s.x, s.y - enemy.h - 24, damage, isCrit);
 }
 
 // ════════════════════════════════════════
-// 浮動傷害數字
+// 浮動傷害數字（傳入的是螢幕座標）
 // ════════════════════════════════════════
 export function showDamageNumber(x, y, value, isCrit = false, isHeal = false) {
   const el = document.createElement('div');

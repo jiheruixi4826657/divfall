@@ -29,6 +29,12 @@ export const GameState = {
   CLEAR:    'clear',     // 通關
 };
 
+// ── 世界與等距投影設定 ──
+// 遊戲邏輯都跑在「俯視世界座標 (wx, wy)」，
+// 只有在繪製時才投影成 2.5D 斜角等距畫面（玩家永遠置中，世界在腳下捲動）
+const WORLD = { w: 1500, h: 1500 };   // 競技場大小（世界座標）
+const ISO   = { kx: 0.5, ky: 0.26 };  // 等距壓縮比例（2:1 斜角）
+
 // ── 全局遊戲物件 ──
 export const Game = {
   state:    GameState.IDLE,
@@ -39,7 +45,7 @@ export const Game = {
   enemies:  [],
   projectiles: [],
   effects:  [],
-  camera:   { x: 0, y: 0 },
+  camera:   { wx: WORLD.w / 2, wy: WORLD.h / 2 },
 
   // 時間
   lastTime: 0,
@@ -62,13 +68,28 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 // ════════════════════════════════════════
+// 等距投影：世界座標 (wx,wy) → 螢幕像素 (x,y)
+// 相機永遠跟著玩家，所以玩家會保持在畫面中央
+// ════════════════════════════════════════
+export function worldToScreen(wx, wy) {
+  const dx = wx - Game.camera.wx;
+  const dy = wy - Game.camera.wy;
+  return {
+    x: canvas.width  / 2 + (dx - dy) * ISO.kx,
+    y: canvas.height / 2 + (dx + dy) * ISO.ky,
+  };
+}
+// 深度值（越大越靠近鏡頭，越晚繪製）
+function depthOf(wx, wy) { return wx + wy; }
+
+// ════════════════════════════════════════
 // 玩家類別
 // ════════════════════════════════════════
 export class Player {
   constructor(cls, stats) {
     this.cls   = cls;
-    this.x     = canvas.width  / 2;
-    this.y     = canvas.height / 2;
+    this.x     = WORLD.w / 2;   // 世界座標（不是螢幕座標）
+    this.y     = WORLD.h / 2;
     this.w     = 40;
     this.h     = 40;
     this.speed = stats.speed;
@@ -124,11 +145,13 @@ export class Player {
     // 斜向正規化（避免斜向更快）
     if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
 
-    // 套用速度
-    this.x = clamp(this.x + dx * speed, 20, canvas.width  - 20);
-    this.y = clamp(this.y + dy * speed, 20, canvas.height - 20);
+    // 套用速度（世界座標，夾在競技場範圍內）
+    this.x = clamp(this.x + dx * speed, 40, WORLD.w - 40);
+    this.y = clamp(this.y + dy * speed, 40, WORLD.h - 40);
 
-    if (dx !== 0) this.facing = Math.sign(dx);
+    // 朝向：依等距投影後的水平移動方向決定（dx-dy）
+    const screenDir = dx - dy;
+    if (Math.abs(screenDir) > 0.01) this.facing = Math.sign(screenDir);
   }
 
   // 受傷
@@ -143,7 +166,7 @@ export class Player {
     }
 
     if (this.hp <= 0) onPlayerDead();
-    else playSFX('hit_light');
+    else playSFX('player_hurt');
   }
 
   // 回復
@@ -152,14 +175,22 @@ export class Player {
     updateHUD();
   }
 
-  render(ctx) {
+  // sx,sy = 螢幕上「腳底」的位置（由主迴圈投影後傳入）
+  render(ctx, sx, sy) {
     const blink = this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0;
-    ctx.globalAlpha = blink ? 0.35 : 1;
-    const x = this.x, y = this.y;
     const f = this.facing; // 1=右 -1=左
 
+    // 地面陰影
     ctx.save();
-    ctx.translate(x, y);
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(sx, sy, 22, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    ctx.globalAlpha = blink ? 0.35 : 1;
+    ctx.save();
+    // 身體中心約在腳底上方 26px（角色高度感）
+    ctx.translate(sx, sy - 26);
     ctx.scale(f, 1);
 
     if (this.cls === 'varek') {
@@ -269,12 +300,13 @@ export class Player {
 // 敵人基礎類別
 // ════════════════════════════════════════
 export class Enemy {
-  constructor({ id, name, hp, atk, speed, element, x, y, isBoss = false }) {
+  constructor({ id, name, hp, atk, speed, element, def, x, y, isBoss = false }) {
     this.id      = id;
     this.name    = name;
     this.maxHP   = hp;
     this.hp      = hp;
     this.atk     = atk;
+    this.def     = def ?? (isBoss ? 40 : 12);  // 防禦（避免傷害計算出現 NaN）
     this.speed   = speed;
     this.element = element;  // 屬性（火/冰/... 用於傷害倍率）
     this.x       = x;
@@ -334,10 +366,18 @@ export class Enemy {
     if (this.isBoss) onBossDefeated(this);
   }
 
-  render(ctx) {
+  // sx,sy = 螢幕上「腳底」位置（主迴圈投影後傳入）
+  render(ctx, sx, sy) {
     if (!this.alive) return;
-    const x = this.x, y = this.y;
     const hw = this.w/2, hh = this.h/2;
+    const x = sx, y = sy - hh;  // 身體中心抬到腳底上方
+
+    // 地面陰影
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(sx, sy, hw * 0.9, hw * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
 
     ctx.save();
     ctx.translate(x, y);
@@ -458,7 +498,12 @@ function gameLoop(timestamp) {
 
 function update(delta) {
   // 更新玩家
-  if (Game.player) Game.player.update(delta);
+  if (Game.player) {
+    Game.player.update(delta);
+    // 相機平滑跟隨玩家（玩家保持畫面中央）
+    Game.camera.wx += (Game.player.x - Game.camera.wx) * Math.min(1, delta * 10);
+    Game.camera.wy += (Game.player.y - Game.camera.wy) * Math.min(1, delta * 10);
+  }
 
   // 更新敵人
   Game.enemies.forEach(e => e.update(delta));
@@ -480,59 +525,87 @@ function update(delta) {
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 背景漸層
-  const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.8);
-  bgGrad.addColorStop(0, '#120820');
-  bgGrad.addColorStop(1, '#050308');
+  // 背景漸層（深淵）
+  const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height*0.45, 0, canvas.width/2, canvas.height*0.45, Math.max(canvas.width,canvas.height)*0.85);
+  bgGrad.addColorStop(0, '#1a0f2e');
+  bgGrad.addColorStop(0.6, '#0c0718');
+  bgGrad.addColorStop(1, '#040208');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 石磚地板
-  const tileW = 96, tileH = 64;
-  const offX = ((Game.camera.x % tileW) + tileW) % tileW;
-  const offY = ((Game.camera.y % tileH) + tileH) % tileH;
-  for (let ty = -offY - tileH; ty < canvas.height + tileH; ty += tileH) {
-    for (let tx = -offX - tileW; tx < canvas.width + tileW; tx += tileW) {
-      const row = Math.floor((ty + offY) / tileH);
-      const col = Math.floor((tx + offX) / tileW);
-      const seed = (row * 31 + col * 17) & 0xff;
-      const dark = 0.06 + (seed % 20) * 0.002;
-      ctx.fillStyle = `rgba(${40+seed%10},${25+seed%8},${60+seed%12},${dark+0.18})`;
-      ctx.fillRect(tx+1, ty+1, tileW-2, tileH-2);
-      ctx.strokeStyle = 'rgba(80,60,120,.18)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(tx+1, ty+1, tileW-2, tileH-2);
-    }
-  }
+  renderIsoFloor();
 
-  // 地板中心光暈（聚光燈效果）
-  if (Game.player) {
-    const pl = ctx.createRadialGradient(Game.player.x, Game.player.y, 20, Game.player.x, Game.player.y, 260);
-    pl.addColorStop(0, 'rgba(80,50,140,.18)');
-    pl.addColorStop(1, 'transparent');
-    ctx.fillStyle = pl;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  // 中心聚光燈（疊在地板上方，讓玩家周圍更亮）
+  const cl = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 30, canvas.width/2, canvas.height/2, 360);
+  cl.addColorStop(0, 'rgba(120,90,200,.16)');
+  cl.addColorStop(1, 'transparent');
+  ctx.fillStyle = cl;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 敵人
-  Game.enemies.forEach(e => e.render(ctx));
+  // 效果（地面層，畫在角色下方）
+  renderEffects(ctx);
+
+  // ── 收集所有角色，依深度（wx+wy）排序後繪製（遠的先畫）──
+  const drawables = [];
+  Game.enemies.forEach(e => { if (e.alive) drawables.push(e); });
+  if (Game.player) drawables.push(Game.player);
+  drawables.sort((a, b) => depthOf(a.x, a.y) - depthOf(b.x, b.y));
+
+  drawables.forEach(obj => {
+    const s = worldToScreen(obj.x, obj.y);
+    obj.render(ctx, s.x, s.y);
+  });
 
   // 投射物
-  Game.projectiles.forEach(p => p.render(ctx));
+  Game.projectiles.forEach(p => {
+    const s = worldToScreen(p.x, p.y);
+    p.render(ctx, s.x, s.y);
+  });
+}
 
-  // 玩家
-  if (Game.player) Game.player.render(ctx);
+// ── 等距菱形地板 ──
+function renderIsoFloor() {
+  const G = 75; // 每格世界單位
+  const cgx = Math.round(Game.camera.wx / G);
+  const cgy = Math.round(Game.camera.wy / G);
+  const R = 14; // 繪製半徑（格）
+  for (let gy = cgy - R; gy <= cgy + R; gy++) {
+    for (let gx = cgx - R; gx <= cgx + R; gx++) {
+      const wx = gx * G, wy = gy * G;
+      // 競技場外不畫
+      if (wx < 0 || wy < 0 || wx > WORLD.w || wy > WORLD.h) continue;
+      const c = worldToScreen(wx, wy);
+      // 視錐裁切
+      if (c.x < -100 || c.x > canvas.width + 100 || c.y < -100 || c.y > canvas.height + 100) continue;
 
-  // 效果
-  renderEffects(ctx);
+      const hw = G * ISO.kx, hh = G * ISO.ky;
+      const seed = ((gx * 73856093) ^ (gy * 19349663)) & 0xff;
+      const shade = 22 + (seed % 16);
+      ctx.fillStyle = `rgb(${shade + 14},${shade + 6},${shade + 28})`;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y - hh);
+      ctx.lineTo(c.x + hw, c.y);
+      ctx.lineTo(c.x, c.y + hh);
+      ctx.lineTo(c.x - hw, c.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(120,90,180,.14)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
 }
 
 function renderEffects(ctx) {
   Game.effects.forEach(ef => {
-    ctx.globalAlpha = ef.life;
-    ctx.fillStyle = ef.color || '#fff';
+    const s = worldToScreen(ef.x, ef.y);
+    ctx.globalAlpha = Math.max(0, ef.life);
+    const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, ef.r);
+    grad.addColorStop(0, ef.color || '#fff');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(ef.x, ef.y, ef.r * (1 - ef.life * 0.5), 0, Math.PI * 2);
+    ctx.ellipse(s.x, s.y, ef.r * (1.1 - ef.life * 0.4), ef.r * ISO.ky / ISO.kx * (1.1 - ef.life * 0.4), 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   });
@@ -670,23 +743,31 @@ function spawnEnemiesForStage(chapter, stage) {
   const isBoss = stage % 5 === 0;
   const stageInChapter = ((stage - 1) % 50) + 1;
 
+  const px = Game.player?.x ?? WORLD.w / 2;
+  const py = Game.player?.y ?? WORLD.h / 2;
+
   if (isBoss) {
-    const boss = BOSS_DATA[chapter]?.[Math.ceil(stageInChapter / 5) - 1];
-    if (boss) {
-      Game.state = GameState.BOSS;
-      Game.enemies.push(new Enemy({
-        ...boss,
-        x: canvas.width / 2,
-        y: canvas.height / 3,
-        isBoss: true,
-      }));
-    }
+    const boss = BOSS_DATA[chapter]?.[Math.ceil(stageInChapter / 5) - 1]
+              || BOSS_DATA[chapter]?.[0]
+              || { id:`ch${chapter}_boss`, name:'墮神守衛', hp: 8000 + chapter*2000, atk: 40 + chapter*10, speed: 1.1, element: (CHAPTER_ELEMENTS[chapter]||['物理'])[0] };
+    Game.state = GameState.BOSS;
+    Game.enemies.push(new Enemy({
+      ...boss,
+      x: clamp(px, 200, WORLD.w - 200),
+      y: clamp(py - 300, 150, WORLD.h - 150),
+      isBoss: true,
+    }));
   } else {
     const count    = 3 + Math.floor(chapter * 1.5);
     const baseHP   = (200 + chapter * 150) * (1 + (stage % 5) * 0.08);
     const baseATK  = 10 + chapter * 8;
     const elements = CHAPTER_ELEMENTS[chapter] || ['物理'];
     for (let i = 0; i < count; i++) {
+      // 在玩家周圍環狀生成（世界座標），避免貼臉
+      const ang  = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = 280 + Math.random() * 180;
+      const ex = clamp(px + Math.cos(ang) * dist, 60, WORLD.w - 60);
+      const ey = clamp(py + Math.sin(ang) * dist, 60, WORLD.h - 60);
       Game.enemies.push(new Enemy({
         id:      `enemy_ch${chapter}_s${stage}_${i}`,
         name:    '腐化怪',
@@ -694,8 +775,7 @@ function spawnEnemiesForStage(chapter, stage) {
         atk:     baseATK,
         speed:   1.5,
         element: elements[i % elements.length],
-        x:       100 + Math.random() * (canvas.width  - 200),
-        y:       100 + Math.random() * (canvas.height - 200),
+        x: ex, y: ey,
       }));
     }
   }
@@ -741,10 +821,11 @@ const BOSS_DATA = {
 export function startGame(cls, savedRun = null) {
   Game.class   = cls;
   Game.chapter = savedRun?.chapter || 1;
-  Game.stage   = savedRun?.stage   || 0;
+  Game.stage   = savedRun?.stage   || 1;   // 從第 1 關開始（0 會被誤判成 BOSS 關而生不出怪）
 
   const stats = { ...CLASS_STATS[cls] };
   Game.player  = new Player(cls, stats);
+  Game.camera  = { wx: Game.player.x, wy: Game.player.y };
 
   if (savedRun?.currentHP) Game.player.hp = savedRun.currentHP;
 
@@ -767,43 +848,97 @@ export function resumeGame() { Game.state = GameState.RUNNING; }
 // ════════════════════════════════════════
 // 鍵盤輸入
 // ════════════════════════════════════════
+let _inputBound = false;
 function setupInput() {
+  if (_inputBound) return;   // 避免重複綁定全域監聽
+  _inputBound = true;
+
   const keyMap = {
     'arrowup': 'up', 'w': 'up',
     'arrowdown': 'down', 's': 'down',
     'arrowleft': 'left', 'a': 'left',
     'arrowright': 'right', 'd': 'right',
-    'q': 'q', 'e': 'e', 'r': 'r', 'f': 'w',
-    ' ': 'space',
   };
 
   window.addEventListener('keydown', ev => {
-    const k = keyMap[ev.key.toLowerCase()];
+    const key = ev.key.toLowerCase();
+    if (key === 'escape') { togglePause(); return; }
+    const k = keyMap[key];
     if (k) { Game.input[k] = true; ev.preventDefault(); }
-    if (ev.key === ' ') triggerSkill('space');
-    if (ev.key.toLowerCase() === 'q') triggerSkill('q');
-    if (ev.key.toLowerCase() === 'w') triggerSkill('w');
-    if (ev.key.toLowerCase() === 'e') triggerSkill('e');
-    if (ev.key.toLowerCase() === 'r') triggerSkill('r');
+    if (Game.state === GameState.PAUSED) return;
+    if (ev.key === ' ') { triggerSkill('space'); ev.preventDefault(); }
+    if (key === 'q') triggerSkill('q');
+    if (key === 'e') triggerSkill('e');
+    if (key === 'r') triggerSkill('r');
+    if (key === 'f') triggerSkill('w');
+    if (key === 'j' || key === 'k') triggerAttack();  // 普通攻擊
   });
   window.addEventListener('keyup', ev => {
     const k = keyMap[ev.key.toLowerCase()];
     if (k) Game.input[k] = false;
   });
 
-  // 技能按鈕（手機）
+  // 技能按鈕（手機）— touch + click 都綁，桌機也能按
   document.querySelectorAll('.skill-btn').forEach(btn => {
-    btn.addEventListener('touchstart', ev => {
+    const fire = ev => {
       ev.preventDefault();
-      triggerSkill(btn.dataset.skill);
-    });
+      const s = btn.dataset.skill;
+      if (s === 'attack') triggerAttack(); else triggerSkill(s);
+    };
+    btn.addEventListener('touchstart', fire, { passive: false });
+    btn.addEventListener('click', fire);
   });
 
-  // 普通攻擊（滑鼠點擊 canvas）
-  canvas.addEventListener('click', ev => {
+  // 普通攻擊（滑鼠點擊畫面 = 攻擊最近的敵人）
+  canvas.addEventListener('click', () => {
     if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
-    triggerAttack(ev.clientX, ev.clientY);
+    triggerAttack();
   });
+}
+
+// ════════════════════════════════════════
+// ESC 暫停選單
+// ════════════════════════════════════════
+let _pauseState = null;
+function togglePause() {
+  if (document.getElementById('pause-overlay')) { hidePause(); return; }
+  if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
+  showPause();
+}
+function showPause() {
+  _pauseState = Game.state;
+  Game.state = GameState.PAUSED;
+  const a = window.__Audio || {};
+  const sfxOn = a.SFX?.enabled !== false;
+  const bgmOn = a.BGM?.enabled !== false;
+  const ov = document.createElement('div');
+  ov.id = 'pause-overlay';
+  ov.style.cssText = `position:fixed;inset:0;background:rgba(8,4,18,.82);z-index:200;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    color:#E8E0F8;font-family:'微軟正黑體',sans-serif;backdrop-filter:blur(2px)`;
+  ov.innerHTML = `
+    <h2 style="color:#EF9F27;font-size:2rem;letter-spacing:.1em">暫停</h2>
+    <button id="pz-resume" style="min-width:200px;padding:14px;background:linear-gradient(135deg,#b8730a,#EF9F27);border:none;border-radius:8px;font-weight:700;color:#1a0e00;cursor:pointer;font-size:1rem">繼續遊戲</button>
+    <button id="pz-bgm" style="min-width:200px;padding:12px;background:rgba(20,15,35,.9);border:1px solid #5a4080;border-radius:8px;color:#E8E0F8;cursor:pointer">背景音樂：${bgmOn ? '開' : '關'}</button>
+    <button id="pz-sfx" style="min-width:200px;padding:12px;background:rgba(20,15,35,.9);border:1px solid #5a4080;border-radius:8px;color:#E8E0F8;cursor:pointer">音效：${sfxOn ? '開' : '關'}</button>
+    <button id="pz-quit" style="min-width:200px;padding:12px;background:#3a1010;border:1px solid #7a2020;border-radius:8px;color:#e8a0a0;cursor:pointer">放棄並返回大廳</button>
+    <p style="font-size:.8rem;color:#7060a0">按 ESC 也可以繼續</p>`;
+  document.body.appendChild(ov);
+  document.getElementById('pz-resume').onclick = hidePause;
+  document.getElementById('pz-bgm').onclick = (e) => {
+    const on = a.BGM?.enabled !== false; a.setBGMEnabled?.(!on);
+    e.target.textContent = `背景音樂：${!on ? '開' : '關'}`;
+  };
+  document.getElementById('pz-sfx').onclick = (e) => {
+    const on = a.SFX?.enabled !== false; a.setSFXEnabled?.(!on);
+    e.target.textContent = `音效：${!on ? '開' : '關'}`;
+  };
+  document.getElementById('pz-quit').onclick = () => location.reload();
+}
+function hidePause() {
+  const ov = document.getElementById('pause-overlay');
+  if (ov) ov.remove();
+  if (_pauseState) { Game.state = _pauseState; _pauseState = null; }
 }
 
 // ════════════════════════════════════════
@@ -853,10 +988,12 @@ function setupJoystick() {
 // ════════════════════════════════════════
 // 攻擊 / 技能觸發（呼叫 combat.js）
 // ════════════════════════════════════════
-function triggerAttack(targetX, targetY) {
+function triggerAttack() {
   if (!Game.player) return;
+  if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
   import('./combat.js').then(({ performAttack }) => {
-    performAttack(Game.player, Game.enemies, targetX, targetY);
+    // 攻擊離玩家最近的敵人
+    performAttack(Game.player, Game.enemies, Game.player.x, Game.player.y);
   });
 }
 
