@@ -143,31 +143,51 @@ input::placeholder { color: #6a6080; }
   justify-content: center;
 }
 
+.class-card:hover { border-color: var(--gold); transform: translateY(-6px); box-shadow: 0 12px 32px rgba(239,159,39,.22); }
+.class-card.selected { border-color: var(--gold); background: rgba(239,159,39,.08); }
+.class-card h3 { font-size: 1.15rem; color: var(--gold); margin-bottom: 4px; letter-spacing: .05em; }
+.class-card p  { font-size: .88rem; margin-bottom: 4px; color: #c0b0e0; }
+.class-card small { font-size: .72rem; color: #7060a0; }
+
+.class-icon {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.2rem;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 4px 20px rgba(0,0,0,.5);
+}
+.varek-icon {
+  background: radial-gradient(circle at 35% 30%, #f5d980, #c87a10, #5a3000);
+  box-shadow: 0 0 24px rgba(239,180,40,.4), 0 0 0 3px rgba(239,159,39,.3);
+}
+.lyra-icon  {
+  background: radial-gradient(circle at 35% 30%, #c0f8ff, #40b0d0, #003858);
+  box-shadow: 0 0 24px rgba(100,220,255,.4), 0 0 0 3px rgba(122,240,239,.3);
+}
+.kael-icon  {
+  background: radial-gradient(circle at 35% 30%, #d080ff, #7030a0, #1a0030);
+  box-shadow: 0 0 24px rgba(160,80,240,.4), 0 0 0 3px rgba(176,122,239,.3);
+}
 .class-card {
   background: var(--panel);
   border: 2px solid var(--border);
-  border-radius: 12px;
-  padding: 24px 28px;
+  border-radius: 16px;
+  padding: 28px 24px 20px;
   text-align: center;
   cursor: pointer;
-  transition: border-color .2s, transform .15s, box-shadow .2s;
-  min-width: 140px;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+  min-width: 155px;
+  position: relative;
+  overflow: hidden;
 }
-.class-card:hover { border-color: var(--gold); transform: translateY(-4px); box-shadow: 0 8px 24px rgba(239,159,39,.18); }
-.class-card.selected { border-color: var(--gold); background: rgba(239,159,39,.1); }
-.class-card h3 { font-size: 1.2rem; color: var(--gold); margin-bottom: 4px; }
-.class-card p  { font-size: .9rem; margin-bottom: 4px; }
-.class-card small { font-size: .75rem; color: #9080b0; }
-
-.class-icon {
-  width: 64px; height: 64px;
-  border-radius: 50%;
-  margin: 0 auto 12px;
-  background: #2a1a4a;
+.class-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.04) 0%, transparent 60%);
+  pointer-events: none;
 }
-.varek-icon { background: radial-gradient(#efd27a, #8a6000); }
-.lyra-icon  { background: radial-gradient(#7af0ef, #006080); }
-.kael-icon  { background: radial-gradient(#b07aef, #30006a); }
 
 .hub-actions {
   display: flex;

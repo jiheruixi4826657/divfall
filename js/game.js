@@ -152,15 +152,115 @@ export class Player {
     updateHUD();
   }
 
-  // 繪製（暫時用矩形代替，之後換3D模型）
   render(ctx) {
-    const alpha = this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0 ? 0.3 : 1;
-    ctx.globalAlpha = alpha;
+    const blink = this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0;
+    ctx.globalAlpha = blink ? 0.35 : 1;
+    const x = this.x, y = this.y;
+    const f = this.facing; // 1=右 -1=左
 
-    const colors = { varek: '#EFD27A', lyra: '#7AF0EF', kael: '#B07AEF' };
-    ctx.fillStyle = colors[this.cls] || '#fff';
-    ctx.fillRect(this.x - this.w/2, this.y - this.h/2, this.w, this.h);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(f, 1);
 
+    if (this.cls === 'varek') {
+      // 聖怒光暈
+      if (this.holyRage > 50) {
+        const g = ctx.createRadialGradient(0,0,10,0,0,36);
+        g.addColorStop(0, `rgba(255,210,80,${(this.holyRage-50)/100})`);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0,0,36,0,Math.PI*2); ctx.fill();
+      }
+      // 盾（左手）
+      ctx.fillStyle = '#8a6820'; ctx.strokeStyle = '#EFD27A'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(-14, 4, 7, 12, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      // 身體
+      const bg = ctx.createLinearGradient(-10,-18,10,18);
+      bg.addColorStop(0,'#d4a540'); bg.addColorStop(1,'#7a5010');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.roundRect(-10,-18,20,36,4); ctx.fill();
+      // 護甲紋
+      ctx.strokeStyle='rgba(255,220,100,.4)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(-8,-5); ctx.lineTo(8,-5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-8,5); ctx.lineTo(8,5); ctx.stroke();
+      // 頭
+      const hg = ctx.createRadialGradient(-2,-24,2,-2,-24,12);
+      hg.addColorStop(0,'#f5dfa0'); hg.addColorStop(1,'#c08030');
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.arc(0,-26,11,0,Math.PI*2); ctx.fill();
+      // 頭盔
+      ctx.fillStyle='#EFD27A'; ctx.strokeStyle='#8a6820'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(-12,-26); ctx.arc(0,-26,12,Math.PI,0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      // 劍（右手）
+      ctx.fillStyle='#ccc'; ctx.strokeStyle='#888'; ctx.lineWidth=1;
+      ctx.fillRect(12,-22,5,28); ctx.strokeRect(12,-22,5,28);
+      ctx.fillStyle='#EFD27A'; ctx.fillRect(9,-8,11,4);
+
+    } else if (this.cls === 'lyra') {
+      // 魔法光環
+      const t = Date.now()/800;
+      for (let i=0;i<3;i++){
+        const a = t + i*2.094;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*20, Math.sin(a)*20+0, 4,0,Math.PI*2);
+        ctx.fillStyle = ['rgba(100,220,255,.7)','rgba(80,180,255,.5)','rgba(150,255,220,.6)'][i];
+        ctx.fill();
+      }
+      // 法袍
+      const rg = ctx.createLinearGradient(-11,-16,11,20);
+      rg.addColorStop(0,'#2a6a8a'); rg.addColorStop(1,'#0a2030');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.moveTo(-11,-16); ctx.lineTo(11,-16); ctx.lineTo(14,20); ctx.lineTo(-14,20); ctx.closePath(); ctx.fill();
+      // 法袍紋飾
+      ctx.strokeStyle='rgba(100,220,255,.5)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(8,0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(0,20); ctx.stroke();
+      // 頭
+      const lhg = ctx.createRadialGradient(0,-27,2,0,-27,11);
+      lhg.addColorStop(0,'#e0f8ff'); lhg.addColorStop(1,'#7ab8d0');
+      ctx.fillStyle=lhg; ctx.beginPath(); ctx.arc(0,-26,11,0,Math.PI*2); ctx.fill();
+      // 頭髮
+      ctx.fillStyle='#b0e8ff';
+      ctx.beginPath(); ctx.arc(0,-26,11,Math.PI,0); ctx.fill();
+      ctx.beginPath(); ctx.arc(-6,-22,5,0,Math.PI); ctx.fill();
+      // 法杖
+      ctx.strokeStyle='#7AF0EF'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(14,-24); ctx.lineTo(14,22); ctx.stroke();
+      ctx.fillStyle='rgba(100,255,240,.9)';
+      ctx.beginPath(); ctx.arc(14,-26,6,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(14,-26,6,0,Math.PI*2); ctx.stroke();
+
+    } else { // kael
+      // 暗影效果
+      const sg = ctx.createRadialGradient(0,0,5,0,0,32);
+      sg.addColorStop(0,'rgba(80,0,120,.4)'); sg.addColorStop(1,'transparent');
+      ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,0,32,0,Math.PI*2); ctx.fill();
+      // 身體（皮革）
+      const kg = ctx.createLinearGradient(-9,-16,9,18);
+      kg.addColorStop(0,'#2a1040'); kg.addColorStop(1,'#0d0018');
+      ctx.fillStyle=kg;
+      ctx.beginPath(); ctx.roundRect(-9,-16,18,34,3); ctx.fill();
+      // 斗篷
+      ctx.fillStyle='rgba(40,0,70,.85)';
+      ctx.beginPath(); ctx.moveTo(-12,-12); ctx.lineTo(-18,22); ctx.lineTo(-9,18); ctx.closePath(); ctx.fill();
+      // 頭
+      const khg = ctx.createRadialGradient(0,-27,2,0,-27,10);
+      khg.addColorStop(0,'#d0b0e0'); khg.addColorStop(1,'#7040a0');
+      ctx.fillStyle=khg; ctx.beginPath(); ctx.arc(0,-26,10,0,Math.PI*2); ctx.fill();
+      // 面具
+      ctx.fillStyle='rgba(20,0,40,.7)';
+      ctx.beginPath(); ctx.ellipse(0,-24,7,5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(180,100,255,.8)';
+      ctx.beginPath(); ctx.arc(-3,-24,2,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3,-24,2,0,Math.PI*2); ctx.fill();
+      // 匕首（右）
+      ctx.fillStyle='#B07AEF'; ctx.strokeStyle='#5a2090'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(12,-18); ctx.lineTo(18,2); ctx.lineTo(14,2); ctx.lineTo(10,-18); ctx.closePath(); ctx.fill(); ctx.stroke();
+      // 匕首（左）
+      ctx.fillStyle='#9060cf';
+      ctx.beginPath(); ctx.moveTo(-12,-10); ctx.lineTo(-18,8); ctx.lineTo(-14,8); ctx.lineTo(-10,-10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+
+    ctx.restore();
     ctx.globalAlpha = 1;
   }
 }
@@ -236,23 +336,105 @@ export class Enemy {
 
   render(ctx) {
     if (!this.alive) return;
-    ctx.fillStyle = this.isBoss ? '#e74c3c' : '#c0392b';
-    ctx.fillRect(this.x - this.w/2, this.y - this.h/2, this.w, this.h);
+    const x = this.x, y = this.y;
+    const hw = this.w/2, hh = this.h/2;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (this.isBoss) {
+      // BOSS 光暈
+      const t = Date.now()/600;
+      const pulse = 1 + Math.sin(t)*0.08;
+      const bg = ctx.createRadialGradient(0,0,10,0,0,hw*1.8*pulse);
+      bg.addColorStop(0,'rgba(200,30,30,.3)'); bg.addColorStop(1,'transparent');
+      ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(0,0,hw*1.8*pulse,0,Math.PI*2); ctx.fill();
+
+      // 身體
+      const eg = ctx.createRadialGradient(-hw*.3,-hh*.3,4,0,0,hw);
+      eg.addColorStop(0,'#8a1010'); eg.addColorStop(1,'#2a0000');
+      ctx.fillStyle=eg;
+      ctx.beginPath();
+      // 六角形BOSS形狀
+      for(let i=0;i<6;i++){
+        const a=i*Math.PI/3 - Math.PI/6;
+        i===0 ? ctx.moveTo(Math.cos(a)*hw*pulse, Math.sin(a)*hh*pulse)
+              : ctx.lineTo(Math.cos(a)*hw*pulse, Math.sin(a)*hh*pulse);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#ff4040'; ctx.lineWidth=2;
+      ctx.stroke();
+
+      // 眼睛
+      ctx.fillStyle='#ff2020';
+      ctx.beginPath(); ctx.arc(-12,-8,6,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(12,-8,6,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(-12,-8,3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(12,-8,3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#ff0000';
+      ctx.beginPath(); ctx.arc(-12,-8,1.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(12,-8,1.5,0,Math.PI*2); ctx.fill();
+
+      // 嘴
+      ctx.strokeStyle='#ff4040'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(0,8,10,0.2,Math.PI-0.2); ctx.stroke();
+
+    } else {
+      // 普通敵人 — 暗色鬼怪造型
+      const elemColors = {
+        fire:'#e74c3c', ice:'#3498db', lightning:'#f1c40f',
+        wood:'#27ae60', earth:'#8B5E3C', light:'#f9e4a0',
+        dark:'#8e44ad', physical:'#95a5a6', magic:'#1abc9c'
+      };
+      const col = elemColors[this.element] || '#c0392b';
+
+      // 身體光暈
+      const sg = ctx.createRadialGradient(0,0,4,0,0,hw+6);
+      sg.addColorStop(0, col+'88'); sg.addColorStop(1,'transparent');
+      ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,0,hw+6,0,Math.PI*2); ctx.fill();
+
+      // 身體（橢圓）
+      const eg2 = ctx.createRadialGradient(-6,-8,2,0,0,hw);
+      eg2.addColorStop(0, col+'cc'); eg2.addColorStop(1,'#1a0008');
+      ctx.fillStyle=eg2;
+      ctx.beginPath(); ctx.ellipse(0,4,hw*.8,hh*.9,0,0,Math.PI*2); ctx.fill();
+
+      // 眼睛
+      ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(-7,-4,4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7,-4,4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(-7,-4,2,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7,-4,2,0,Math.PI*2); ctx.fill();
+
+      // 爪子
+      ctx.strokeStyle=col+'aa'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(-hw,0); ctx.lineTo(-hw-8,-6); ctx.moveTo(-hw,0); ctx.lineTo(-hw-8,4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hw,0);  ctx.lineTo(hw+8,-6);  ctx.moveTo(hw,0);  ctx.lineTo(hw+8,4); ctx.stroke();
+    }
+
+    ctx.restore();
 
     // HP 條
-    const barW = this.w;
+    const barW = Math.max(this.w, 50);
     const pct  = this.hp / this.maxHP;
-    ctx.fillStyle = '#333';
-    ctx.fillRect(this.x - barW/2, this.y - this.h/2 - 10, barW, 5);
-    ctx.fillStyle = this.isBoss ? '#e74c3c' : '#27ae60';
-    ctx.fillRect(this.x - barW/2, this.y - this.h/2 - 10, barW * pct, 5);
+    const barY = y - hh - 14;
+    ctx.fillStyle = 'rgba(0,0,0,.6)';
+    ctx.fillRect(x - barW/2 - 1, barY - 1, barW + 2, 8);
+    ctx.fillStyle = pct > 0.5 ? '#27ae60' : pct > 0.25 ? '#e67e22' : '#e74c3c';
+    ctx.fillRect(x - barW/2, barY, barW * pct, 6);
+    ctx.strokeStyle='rgba(255,255,255,.15)'; ctx.lineWidth=1;
+    ctx.strokeRect(x - barW/2, barY, barW, 6);
 
     // 名稱（BOSS才顯示）
     if (this.isBoss) {
-      ctx.fillStyle = '#E8E0F8';
-      ctx.font = '14px sans-serif';
+      ctx.fillStyle = '#ffaaaa';
+      ctx.font = 'bold 13px "微軟正黑體",sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(this.name, this.x, this.y - this.h/2 - 16);
+      ctx.shadowColor='#000'; ctx.shadowBlur=4;
+      ctx.fillText(this.name, x, y - hh - 20);
+      ctx.shadowBlur=0;
     }
   }
 }
@@ -298,21 +480,38 @@ function update(delta) {
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 地板（佔位用，之後換成場景貼圖）
-  ctx.fillStyle = '#0a0710';
+  // 背景漸層
+  const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.8);
+  bgGrad.addColorStop(0, '#120820');
+  bgGrad.addColorStop(1, '#050308');
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 地板格線（簡單視覺）
-  ctx.strokeStyle = 'rgba(100,80,150,.12)';
-  ctx.lineWidth = 1;
-  const gridSize = 80;
-  const offX = (Game.camera.x % gridSize + gridSize) % gridSize;
-  const offY = (Game.camera.y % gridSize + gridSize) % gridSize;
-  for (let x = -offX; x < canvas.width + gridSize; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  // 石磚地板
+  const tileW = 96, tileH = 64;
+  const offX = ((Game.camera.x % tileW) + tileW) % tileW;
+  const offY = ((Game.camera.y % tileH) + tileH) % tileH;
+  for (let ty = -offY - tileH; ty < canvas.height + tileH; ty += tileH) {
+    for (let tx = -offX - tileW; tx < canvas.width + tileW; tx += tileW) {
+      const row = Math.floor((ty + offY) / tileH);
+      const col = Math.floor((tx + offX) / tileW);
+      const seed = (row * 31 + col * 17) & 0xff;
+      const dark = 0.06 + (seed % 20) * 0.002;
+      ctx.fillStyle = `rgba(${40+seed%10},${25+seed%8},${60+seed%12},${dark+0.18})`;
+      ctx.fillRect(tx+1, ty+1, tileW-2, tileH-2);
+      ctx.strokeStyle = 'rgba(80,60,120,.18)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tx+1, ty+1, tileW-2, tileH-2);
+    }
   }
-  for (let y = -offY; y < canvas.height + gridSize; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+
+  // 地板中心光暈（聚光燈效果）
+  if (Game.player) {
+    const pl = ctx.createRadialGradient(Game.player.x, Game.player.y, 20, Game.player.x, Game.player.y, 260);
+    pl.addColorStop(0, 'rgba(80,50,140,.18)');
+    pl.addColorStop(1, 'transparent');
+    ctx.fillStyle = pl;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   // 敵人
