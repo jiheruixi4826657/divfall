@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>神殞 DIVFALL</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/hud.css">
+  <link rel="stylesheet" href="css/card.css">
+  <link rel="stylesheet" href="css/lobby.css">
+  <link rel="stylesheet" href="css/panels.css">
+</head>
+<body>
+
+  <!-- ════════════════════════════════
+       畫面 1：登入 / 註冊
+  ════════════════════════════════ -->
+  <div id="screen-auth" class="screen active">
+    <div class="auth-box">
+      <h1 class="game-title">神殞<span>DIVFALL</span></h1>
+
+      <!-- 登入表單 -->
+      <div id="form-login">
+        <input id="login-email" type="email" placeholder="電子郵件" autocomplete="email">
+        <input id="login-password" type="password" placeholder="密碼" autocomplete="current-password">
+        <button id="btn-login" class="btn-primary">登入</button>
+        <button id="btn-to-register" class="btn-secondary">還沒有帳號？註冊</button>
+        <p id="login-error" class="error-msg"></p>
+      </div>
+
+      <!-- 註冊表單 -->
+      <div id="form-register" class="hidden">
+        <input id="reg-username" type="text" placeholder="玩家名稱（唯一）" maxlength="16">
+        <input id="reg-email" type="email" placeholder="電子郵件" autocomplete="email">
+        <input id="reg-password" type="password" placeholder="密碼（至少6位）" autocomplete="new-password">
+        <button id="btn-register" class="btn-primary">建立帳號</button>
+        <button id="btn-to-login" class="btn-secondary">已有帳號？登入</button>
+        <p id="register-error" class="error-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       畫面 2：主選單 Hub
+  ════════════════════════════════ -->
+  <div id="screen-hub" class="screen hidden">
+    <header class="hub-header">
+      <span id="hub-username">玩家名稱</span>
+      <span id="hub-gold">💰 0</span>
+      <span id="hub-talent">⭐ 0 天賦點</span>
+      <button id="btn-logout" class="btn-small">登出</button>
+    </header>
+
+    <div class="hub-main">
+      <!-- 職業選擇 -->
+      <div class="class-select">
+        <div class="class-card" data-class="varek">
+          <div class="class-icon varek-icon"></div>
+          <h3>VAREK</h3>
+          <p>斷神騎</p>
+          <small>物理 / 光 / 暗</small>
+        </div>
+        <div class="class-card" data-class="lyra">
+          <div class="class-icon lyra-icon"></div>
+          <h3>LYRA</h3>
+          <p>術式者</p>
+          <small>火 / 冰 / 雷 / 木 / 土</small>
+        </div>
+        <div class="class-card" data-class="kael">
+          <div class="class-icon kael-icon"></div>
+          <h3>KAEL</h3>
+          <p>影刃者</p>
+          <small>暗 / 物理 / 魔法</small>
+        </div>
+      </div>
+
+      <!-- 行動按鈕 -->
+      <div class="hub-actions">
+        <button id="btn-start-solo" class="btn-primary btn-large" disabled>單人開始</button>
+        <button id="btn-open-lobby" class="btn-secondary btn-large">多人組隊</button>
+        <button id="btn-talent" class="btn-secondary">天賦樹</button>
+        <button id="btn-shop" class="btn-secondary">商店</button>
+        <button id="btn-equipment" class="btn-secondary">裝備</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       畫面 3：多人大廳
+  ════════════════════════════════ -->
+  <div id="screen-lobby" class="screen hidden">
+    <div class="lobby-box">
+      <h2>組隊大廳</h2>
+      <div class="lobby-actions">
+        <button id="btn-create-room" class="btn-primary">建立房間</button>
+        <div class="join-row">
+          <input id="input-room-code" type="text" placeholder="輸入房間代碼" maxlength="6">
+          <button id="btn-join-room" class="btn-primary">加入</button>
+        </div>
+        <button id="btn-back-hub" class="btn-secondary">返回</button>
+      </div>
+      <div id="lobby-room-info" class="hidden">
+        <p>房間代碼：<strong id="lobby-code-display"></strong></p>
+        <div id="lobby-players"></div>
+        <button id="btn-start-multi" class="btn-primary" disabled>開始遊戲</button>
+      </div>
+      <p id="lobby-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       畫面 4：戰鬥場景
+  ════════════════════════════════ -->
+  <div id="screen-game" class="screen hidden">
+    <!-- 遊戲 Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD 層（疊在 canvas 上） -->
+    <div id="hud">
+      <!-- 左上：隊友狀態 -->
+      <div id="hud-teammates"></div>
+
+      <!-- 左下：玩家狀態 -->
+      <div id="hud-player">
+        <div class="hp-bar-wrap">
+          <div id="hud-hp-bar" class="hp-bar"></div>
+          <span id="hud-hp-text">1200 / 1200</span>
+        </div>
+        <div id="hud-cost">⚡ 費用：<span id="hud-cost-val">3</span></div>
+      </div>
+
+      <!-- 右下：技能按鈕（手機用） -->
+      <div id="hud-skills">
+        <button class="skill-btn" id="skill-q" data-skill="q">Q</button>
+        <button class="skill-btn" id="skill-w" data-skill="w">W</button>
+        <button class="skill-btn" id="skill-e" data-skill="e">E</button>
+        <button class="skill-btn" id="skill-r" data-skill="r">R</button>
+        <button class="skill-btn" id="skill-space" data-skill="space">閃</button>
+        <button class="skill-btn" id="skill-attack" data-skill="attack">攻</button>
+      </div>
+
+      <!-- 虛擬搖桿（手機用） -->
+      <div id="joystick-zone">
+        <div id="joystick-base">
+          <div id="joystick-stick"></div>
+        </div>
+      </div>
+
+      <!-- 關卡資訊 -->
+      <div id="hud-stage">
+        <span id="hud-chapter">Chapter 1</span>
+        <span id="hud-stage-num">Stage 1</span>
+      </div>
+    </div>
+
+    <!-- 卡牌選擇覆蓋層 -->
+    <div id="card-overlay" class="hidden">
+      <div id="card-overlay-title">選擇一張卡牌</div>
+      <div id="card-timer-bar"><div id="card-timer-fill"></div></div>
+      <div id="card-choices"></div>
+      <div id="card-teammate-status"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       天賦樹覆蓋層
+  ════════════════════════════════ -->
+  <div id="talent-overlay" class="panel-overlay hidden"></div>
+
+  <!-- ════════════════════════════════
+       Hub：天賦 / 裝備 / 商店 面板
+  ════════════════════════════════ -->
+  <div id="panel-equipment" class="panel-overlay hidden">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <h2 style="color:#EF9F27;font-size:1.4rem">裝備管理</h2>
+      <button id="btn-close-equipment" class="btn-secondary btn-small">關閉</button>
+    </div>
+    <div id="equipment-panel"></div>
+  </div>
+
+  <div id="panel-shop" class="panel-overlay hidden">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <h2 style="color:#EF9F27;font-size:1.4rem">大廳商店</h2>
+      <span id="shop-hub-gold" style="color:#EF9F27"></span>
+      <button id="btn-close-shop" class="btn-secondary btn-small">關閉</button>
+    </div>
+    <div id="hub-shop-content" style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+
+  <!-- ════════════════════════════════
+       載入提示
+  ════════════════════════════════ -->
+  <div id="screen-loading" class="screen hidden">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loading-text">載入中...</p>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       Firebase SDK（從 CDN 載入）
+  ════════════════════════════════ -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    window.__firebaseReady = { initializeApp, getAuth, getFirestore };
+    // 觸發自訂事件，讓其他 script 知道 Firebase 已就緒
+    document.dispatchEvent(new Event('firebase-ready'));
+  </script>
+
+  <!-- 遊戲主腳本（type="module" 讓 ES6 import/export 生效） -->
+  <script type="module" src="js/firebase-init.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/data.js"></script>
+  <script type="module" src="js/bgm.js"></script>
+  <script type="module" src="js/cards.js"></script>
+  <script type="module" src="js/combat.js"></script>
+  <script type="module" src="js/equipment.js"></script>
+  <script type="module" src="js/shop.js"></script>
+  <script type="module" src="js/talent.js"></script>
+  <script type="module" src="js/multiplayer.js"></script>
+  <script type="module" src="js/lobby.js"></script>
+  <script type="module" src="js/game.js"></script>
+
+  <!-- Hub 面板按鈕事件 -->
+  <script type="module">
+    import { loadUserData } from './js/data.js';
+    import { renderTalentTree } from './js/talent.js';
+    import { renderEquipmentPanel } from './js/equipment.js';
+    import { renderHubShop } from './js/shop.js';
+    import { auth } from './js/firebase-init.js';
+
+    // 天賦樹
+    document.getElementById('btn-talent')?.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const data = await loadUserData(user.uid);
+      const cls  = document.querySelector('.class-card.selected')?.dataset.class || 'varek';
+      const talentKey = `${cls}Talents`;
+      renderTalentTree(cls, data[talentKey] || {}, data.totalTalentPts || 0, async () => {
+        const fresh = await loadUserData(user.uid);
+        document.getElementById('hub-talent').textContent = `⭐ ${fresh.totalTalentPts ?? 0} 天賦點`;
+        renderTalentTree(cls, fresh[talentKey] || {}, fresh.totalTalentPts || 0, null);
+      });
+    });
+
+    // 裝備
+    document.getElementById('btn-equipment')?.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const data = await loadUserData(user.uid);
+      const cls  = document.querySelector('.class-card.selected')?.dataset.class || 'varek';
+      renderEquipmentPanel(
+        data.equipment?.equipped?.[cls] || {},
+        data.equipment?.owned || [],
+        null
+      );
+      document.getElementById('panel-equipment').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-equipment')?.addEventListener('click', () => {
+      document.getElementById('panel-equipment').classList.add('hidden');
+    });
+
+    // 商店
+    document.getElementById('btn-shop')?.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const data  = await loadUserData(user.uid);
+      const gold  = data.gold || 0;
+      document.getElementById('shop-hub-gold').textContent = `💰 ${gold}`;
+      renderHubShop(gold, data.cards?.unlockedPacks || [], async () => {
+        const fresh = await loadUserData(user.uid);
+        document.getElementById('shop-hub-gold').textContent = `💰 ${fresh.gold || 0}`;
+        document.getElementById('hub-gold').textContent = `💰 ${fresh.gold || 0}`;
+        renderHubShop(fresh.gold || 0, fresh.cards?.unlockedPacks || [], null);
+      });
+      document.getElementById('panel-shop').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-shop')?.addEventListener('click', () => {
+      document.getElementById('panel-shop').classList.add('hidden');
+    });
+  </script>
+</body>
+</html>

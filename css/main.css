@@ -1,0 +1,202 @@
+/* ══════════════════════════════════════
+   神殞 DIVFALL — 主樣式
+   色調：深紫黑 #0D0A14 / 冷白 #E8E0F8 / 神聖金 #EF9F27
+══════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0D0A14;
+  --text:     #E8E0F8;
+  --gold:     #EF9F27;
+  --red:      #C0392B;
+  --teal:     #1ABC9C;
+  --panel:    rgba(20, 15, 35, 0.92);
+  --border:   rgba(239, 159, 39, 0.4);
+  --radius:   8px;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', '微軟正黑體', sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── 畫面切換 ── */
+.screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.screen.hidden { display: none !important; }
+.screen.active { display: flex; }
+
+/* ── 通用按鈕 ── */
+button { cursor: pointer; border: none; outline: none; font-family: inherit; border-radius: var(--radius); transition: filter .15s, transform .1s; }
+button:active { transform: scale(.96); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #b8730a, var(--gold));
+  color: #1a0e00;
+  font-weight: 700;
+  padding: 12px 28px;
+  font-size: 1rem;
+}
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-primary:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+.btn-secondary {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 22px;
+  font-size: .95rem;
+}
+.btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
+
+.btn-small { padding: 6px 14px; font-size: .8rem; }
+.btn-large { min-width: 180px; padding: 16px 32px; font-size: 1.1rem; }
+
+.hidden { display: none !important; }
+
+/* ── 輸入框 ── */
+input[type="text"], input[type="email"], input[type="password"] {
+  width: 100%;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 12px 16px;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+input:focus { border-color: var(--gold); }
+input::placeholder { color: #6a6080; }
+
+/* ── 錯誤訊息 ── */
+.error-msg { color: var(--red); font-size: .85rem; min-height: 1.2em; margin-top: 4px; }
+
+/* ══════════════════════════════════════
+   登入 / 註冊畫面
+══════════════════════════════════════ */
+#screen-auth { background: radial-gradient(ellipse at 50% 30%, #1a0a2e 0%, var(--bg) 70%); }
+
+.auth-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 0 60px rgba(239,159,39,.12);
+}
+
+.game-title {
+  text-align: center;
+  font-size: 2rem;
+  letter-spacing: .1em;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.game-title span { color: var(--gold); margin-left: 10px; }
+
+/* ══════════════════════════════════════
+   主選單 Hub
+══════════════════════════════════════ */
+#screen-hub {
+  flex-direction: column;
+  align-items: stretch;
+  background: radial-gradient(ellipse at 50% 0%, #1a0830 0%, var(--bg) 65%);
+}
+
+.hub-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: .95rem;
+}
+.hub-header #hub-username { font-weight: 700; color: var(--gold); }
+.hub-header #hub-gold, .hub-header #hub-talent { color: var(--text); }
+.hub-header #btn-logout { margin-left: auto; }
+
+.hub-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  padding: 24px;
+}
+
+/* 職業選擇卡片 */
+.class-select {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.class-card {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, transform .15s, box-shadow .2s;
+  min-width: 140px;
+}
+.class-card:hover { border-color: var(--gold); transform: translateY(-4px); box-shadow: 0 8px 24px rgba(239,159,39,.18); }
+.class-card.selected { border-color: var(--gold); background: rgba(239,159,39,.1); }
+.class-card h3 { font-size: 1.2rem; color: var(--gold); margin-bottom: 4px; }
+.class-card p  { font-size: .9rem; margin-bottom: 4px; }
+.class-card small { font-size: .75rem; color: #9080b0; }
+
+.class-icon {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  margin: 0 auto 12px;
+  background: #2a1a4a;
+}
+.varek-icon { background: radial-gradient(#efd27a, #8a6000); }
+.lyra-icon  { background: radial-gradient(#7af0ef, #006080); }
+.kael-icon  { background: radial-gradient(#b07aef, #30006a); }
+
+.hub-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ══════════════════════════════════════
+   載入畫面
+══════════════════════════════════════ */
+#screen-loading { background: var(--bg); flex-direction: column; }
+.loading-box { text-align: center; }
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid rgba(239,159,39,.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════════
+   手機響應
+══════════════════════════════════════ */
+@media (max-width: 600px) {
+  .auth-box { padding: 28px 20px; }
+  .class-select { gap: 12px; }
+  .class-card { padding: 16px 18px; min-width: 110px; }
+  .hub-actions { flex-direction: column; align-items: center; }
+}

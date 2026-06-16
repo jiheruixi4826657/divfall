@@ -1,0 +1,71 @@
+/* ══════════════════════════════════════
+   神殞 DIVFALL — 多人大廳樣式
+══════════════════════════════════════ */
+
+#screen-lobby {
+  background: radial-gradient(ellipse at 50% 30%, #0e0520 0%, #0D0A14 70%);
+}
+
+.lobby-box {
+  background: rgba(20,12,40,.95);
+  border: 1px solid rgba(239,159,39,.35);
+  border-radius: 16px;
+  padding: 36px 32px;
+  width: min(440px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.lobby-box h2 {
+  font-size: 1.5rem;
+  color: #EF9F27;
+  text-align: center;
+  letter-spacing: .08em;
+}
+
+.lobby-actions { display: flex; flex-direction: column; gap: 12px; }
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+.join-row input { flex: 1; }
+.join-row button { white-space: nowrap; }
+
+/* 房間資訊 */
+#lobby-room-info {
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(239,159,39,.2);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#lobby-code-display {
+  font-size: 1.4rem;
+  color: #EF9F27;
+  letter-spacing: .15em;
+  font-weight: 900;
+}
+
+#lobby-players { display: flex; flex-direction: column; gap: 8px; }
+.lobby-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .9rem;
+}
+.lobby-player-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: #2a1a4a;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .75rem;
+  color: #EF9F27;
+  font-weight: 700;
+}
+.lobby-player-name { color: #E8E0F8; }
+.lobby-player-class { color: #9080b0; font-size: .78rem; }
+.lobby-player-host { color: #EF9F27; font-size: .72rem; margin-left: 4px; }

@@ -1,0 +1,126 @@
+/* ══════════════════════════════════════
+   神殞 DIVFALL — 卡牌選擇介面
+══════════════════════════════════════ */
+
+#card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.82);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+#card-overlay-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #EF9F27;
+  letter-spacing: .1em;
+}
+
+/* 倒計時條 */
+#card-timer-bar {
+  width: min(480px, 90vw);
+  height: 6px;
+  background: rgba(255,255,255,.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#card-timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #27ae60, #EF9F27, #e74c3c);
+  border-radius: 3px;
+  width: 100%;
+  transition: width .5s linear;
+}
+
+/* 卡牌容器 */
+#card-choices {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* 單張卡牌 */
+.card {
+  width: 160px;
+  background: rgba(20,12,40,.95);
+  border-radius: 12px;
+  border: 2px solid rgba(239,159,39,.35);
+  padding: 16px 14px;
+  cursor: pointer;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: card-slide-in .3s ease-out both;
+  user-select: none;
+}
+.card:hover {
+  transform: translateY(-8px) scale(1.03);
+  border-color: #EF9F27;
+  box-shadow: 0 12px 32px rgba(239,159,39,.25);
+}
+
+@keyframes card-slide-in {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 品質顏色 */
+.card.quality-common  { border-color: rgba(160,160,160,.5); }
+.card.quality-rare    { border-color: rgba(52,152,219,.6); }
+.card.quality-epic    { border-color: rgba(155,89,182,.7); }
+.card.quality-legend  { border-color: rgba(239,159,39,.9); box-shadow: 0 0 16px rgba(239,159,39,.2); }
+
+.card-cost {
+  font-size: .75rem;
+  color: #7af0ef;
+  font-weight: 700;
+  background: rgba(0,180,180,.15);
+  border-radius: 4px;
+  padding: 2px 6px;
+  align-self: flex-start;
+}
+.card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #E8E0F8;
+}
+.card-type {
+  font-size: .7rem;
+  color: #9080b0;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.card-desc {
+  font-size: .78rem;
+  color: #c0b8d8;
+  line-height: 1.4;
+  flex: 1;
+}
+
+/* 隊友選擇狀態 */
+#card-teammate-status {
+  display: flex;
+  gap: 16px;
+  font-size: .85rem;
+  color: #9080b0;
+}
+.teammate-pick-status { display: flex; align-items: center; gap: 6px; }
+.teammate-pick-status .name { color: #EF9F27; }
+.teammate-pick-status .done { color: #27ae60; }
+.teammate-pick-status .wait { color: #9080b0; }
+
+/* 手機縮放 */
+@media (max-width: 520px) {
+  .card { width: 130px; padding: 12px 10px; }
+  .card-name { font-size: .9rem; }
+  #card-overlay-title { font-size: 1.1rem; }
+}

@@ -1,0 +1,162 @@
+/* ══════════════════════════════════════
+   神殞 DIVFALL — 戰鬥 HUD 樣式
+══════════════════════════════════════ */
+
+/* Canvas 全屏 */
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #0a0710;
+}
+
+/* HUD 層疊在 canvas 上，不接收滑鼠事件（讓 canvas 接收）*/
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── 隊友狀態（左上） ── */
+#hud-teammates {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.teammate-bar {
+  background: rgba(0,0,0,.6);
+  border: 1px solid rgba(239,159,39,.3);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: .75rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+.teammate-name { color: #EF9F27; font-weight: 700; }
+.teammate-hp-bar-wrap { flex: 1; height: 6px; background: #2a1a1a; border-radius: 3px; overflow: hidden; }
+.teammate-hp-fill { height: 100%; background: #27ae60; transition: width .3s; border-radius: 3px; }
+
+/* ── 玩家狀態（左下） ── */
+#hud-player {
+  position: absolute;
+  bottom: 100px;
+  left: 16px;
+  pointer-events: none;
+}
+.hp-bar-wrap {
+  width: 200px;
+  background: rgba(0,0,0,.6);
+  border: 1px solid rgba(239,159,39,.3);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.hp-bar {
+  height: 10px;
+  background: linear-gradient(90deg, #e74c3c, #c0392b);
+  border-radius: 5px;
+  transition: width .2s;
+  width: 100%;
+}
+#hud-hp-text { font-size: .75rem; color: #E8E0F8; margin-top: 3px; display: block; }
+#hud-cost { margin-top: 6px; font-size: .85rem; color: #7af0ef; font-weight: 700; }
+
+/* ── 技能按鈕（右下，手機） ── */
+#hud-skills {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(2, 56px);
+  gap: 8px;
+  pointer-events: all;
+}
+.skill-btn {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(20,10,40,.85);
+  border: 2px solid rgba(239,159,39,.5);
+  color: #E8E0F8;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .1s, background .1s;
+  pointer-events: all;
+  -webkit-tap-highlight-color: transparent;
+}
+.skill-btn:active { background: rgba(239,159,39,.3); border-color: #EF9F27; }
+.skill-btn.cooldown { border-color: #555; color: #666; }
+
+/* ── 虛擬搖桿（左下） ── */
+#joystick-zone {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 130px;
+  height: 130px;
+  pointer-events: all;
+}
+#joystick-base {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(0,0,0,.4);
+  border: 2px solid rgba(239,159,39,.25);
+  position: relative;
+}
+#joystick-stick {
+  position: absolute;
+  width: 48px; height: 48px;
+  background: rgba(239,159,39,.7);
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform .05s;
+  pointer-events: none;
+}
+
+/* ── 關卡資訊（右上） ── */
+#hud-stage {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  text-align: right;
+  font-size: .8rem;
+  color: rgba(232,224,248,.7);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#hud-chapter { color: var(--gold, #EF9F27); font-weight: 700; }
+
+/* ── 浮動傷害數字 ── */
+.dmg-float {
+  position: fixed;
+  font-weight: 900;
+  pointer-events: none;
+  animation: float-up .9s ease-out forwards;
+  z-index: 20;
+  text-shadow: 0 2px 4px rgba(0,0,0,.8);
+}
+.dmg-float.normal { color: #ffffff; font-size: 1.2rem; }
+.dmg-float.crit   { color: #EF9F27; font-size: 1.8rem; }
+.dmg-float.heal   { color: #27ae60; font-size: 1.1rem; }
+
+@keyframes float-up {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-24px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-60px) scale(.9); }
+}
+
+/* ── PC 模式：隱藏手機控制 ── */
+@media (hover: hover) and (pointer: fine) {
+  #joystick-zone { display: none; }
+  #hud-skills { display: none; }
+}
