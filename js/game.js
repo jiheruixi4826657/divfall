@@ -15,6 +15,7 @@ import { showCardChoice } from './cards.js';
 import { playBGM, playSFX } from './bgm.js';
 import { showDamageNumber, hitStop } from './combat.js';
 import { drawHero } from './sprites.js';
+import { updateFX, renderFXWorld, renderFlash, shakeOffset } from './fx.js';
 
 // ── Canvas 設定 ──
 const canvas = document.getElementById('game-canvas');
@@ -452,6 +453,9 @@ function update(delta) {
   Game.projectiles.forEach(p => p.update(delta));
   Game.projectiles = Game.projectiles.filter(p => p.alive);
 
+  // 更新打擊特效（粒子/震屏/閃光）
+  updateFX(delta);
+
   // 檢查關卡清除
   checkStageClear();
 }
@@ -459,13 +463,18 @@ function update(delta) {
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 背景漸層（深淵）
+  // 螢幕震動：把整個世界畫面做位移
+  const so = shakeOffset();
+  ctx.save();
+  ctx.translate(so.x, so.y);
+
+  // 背景漸層（深淵）— 畫大一點避免震動時露邊
   const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height*0.45, 0, canvas.width/2, canvas.height*0.45, Math.max(canvas.width,canvas.height)*0.85);
   bgGrad.addColorStop(0, '#1a0f2e');
   bgGrad.addColorStop(0.6, '#0c0718');
   bgGrad.addColorStop(1, '#040208');
   ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40);
 
   renderIsoFloor();
 
@@ -495,6 +504,14 @@ function render() {
     const s = worldToScreen(p.x, p.y);
     p.render(ctx, s.x, s.y);
   });
+
+  // 打擊粒子 / 斬擊弧（畫在角色之上）
+  renderFXWorld(ctx, worldToScreen);
+
+  ctx.restore();           // 結束螢幕震動位移
+
+  // 命中閃光（不受震動影響，蓋全螢幕）
+  renderFlash(ctx, canvas.width, canvas.height);
 }
 
 // ── 等距菱形地板 ──

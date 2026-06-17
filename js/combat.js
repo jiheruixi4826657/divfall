@@ -9,6 +9,7 @@
 
 import { Game, pauseGame, resumeGame, worldToScreen } from './game.js';
 import { playSFX } from './bgm.js';
+import { fxHit, fxBigHit, fxDeath, ELEMENT_COLOR } from './fx.js';
 
 // ════════════════════════════════════════
 // 屬性傷害倍率表
@@ -57,8 +58,9 @@ export function performAttack(player, enemies, targetX, targetY) {
   const sd = (nearest.x - player.x) - (nearest.y - player.y);
   if (Math.abs(sd) > 0.01) player.facing = Math.sign(sd);
 
-  const { damage, isCrit } = calcDamage(player, nearest, 1.0, getPlayerElement(player.cls));
-  applyDamage(nearest, damage, isCrit);
+  const el = getPlayerElement(player.cls);
+  const { damage, isCrit } = calcDamage(player, nearest, 1.0, el);
+  applyDamage(nearest, damage, isCrit, el);
   playSFX(isCrit ? 'crit' : 'hit_light');
 }
 
@@ -89,7 +91,7 @@ export function performSkill(player, skillKey, enemies) {
       const target = findNearestEnemy(enemies, player.x, player.y, 320);
       if (!target) break;
       const { damage, isCrit } = calcDamage(player, target, skillDef.mult, skillDef.element);
-      applyDamage(target, damage, isCrit);
+      applyDamage(target, damage, isCrit, skillDef.element);
       spawnEffect(target.x, target.y, 50, skillDef.color || '#fff', 0.3);
       hitStop(0.05);
       playSFX('hit_medium');
@@ -100,7 +102,7 @@ export function performSkill(player, skillKey, enemies) {
         const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         if (dist > skillDef.range) return;
         const { damage, isCrit } = calcDamage(player, enemy, skillDef.mult, skillDef.element);
-        applyDamage(enemy, damage, isCrit);
+        applyDamage(enemy, damage, isCrit, skillDef.element);
       });
       hitStop(0.1);
       playSFX('hit_heavy');
@@ -117,7 +119,7 @@ export function performSkill(player, skillKey, enemies) {
         player.x += (dx / dist) * Math.min(dist - 60, 200);
         player.y += (dy / dist) * Math.min(dist - 60, 200);
         const { damage, isCrit } = calcDamage(player, target, skillDef.mult, skillDef.element);
-        applyDamage(target, damage, isCrit);
+        applyDamage(target, damage, isCrit, skillDef.element);
       }
       playSFX('hit_medium');
       hitStop(0.05);
@@ -134,7 +136,7 @@ export function performSkill(player, skillKey, enemies) {
       // 爆發技能：全場AOE
       enemies.forEach(enemy => {
         const { damage, isCrit } = calcDamage(player, enemy, skillDef.mult, skillDef.element);
-        applyDamage(enemy, damage, isCrit);
+        applyDamage(enemy, damage, isCrit, skillDef.element);
       });
       hitStop(0.1);
       playSFX('hit_heavy');
@@ -147,8 +149,16 @@ export function performSkill(player, skillKey, enemies) {
 // ════════════════════════════════════════
 // 傷害套用
 // ════════════════════════════════════════
-function applyDamage(enemy, damage, isCrit) {
+function applyDamage(enemy, damage, isCrit, element = '物理') {
+  const wasAlive = enemy.alive;
   enemy.takeDamage(damage);
+
+  // 打擊特效（粒子/震屏/閃光），顏色依屬性
+  const color = ELEMENT_COLOR[element] || '#ffffff';
+  if (wasAlive && !enemy.alive)      fxDeath(enemy.x, enemy.y, color);
+  else if (isCrit)                   fxBigHit(enemy.x, enemy.y, color);
+  else                               fxHit(enemy.x, enemy.y, color, Math.min(3, 1 + damage / 400));
+
   // enemy.x/y 是世界座標 → 投影成螢幕座標再顯示
   const s = worldToScreen(enemy.x, enemy.y);
   showDamageNumber(s.x, s.y - enemy.h - 24, damage, isCrit);
