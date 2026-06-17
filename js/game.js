@@ -14,6 +14,7 @@ import { saveRun, clearRun, addExp, onBossKill, onChapterClear, updateProgress }
 import { showCardChoice } from './cards.js';
 import { playBGM, playSFX } from './bgm.js';
 import { showDamageNumber, hitStop } from './combat.js';
+import { drawHero } from './sprites.js';
 
 // ── Canvas 設定 ──
 const canvas = document.getElementById('game-canvas');
@@ -110,10 +111,14 @@ export class Player {
     this.cost      = 6;
     this._costTimer = 0;
 
-    // 動畫
-    this.facing  = 1;            // 1=右, -1=左
-    this.animFrame = 0;
-    this.animTimer = 0;
+    // 動畫狀態（給 sprites.js 用）
+    this.facing    = 1;          // 1=右, -1=左
+    this.animTime  = 0;          // 動畫時鐘（累積秒數）
+    this.moving    = false;      // 本幀是否在移動 → 走路動畫
+    this.castTimer = 0;          // 施法動作剩餘秒數
+    this.castDur   = 0.35;       // 施法動作總長
+    this.atkTimer  = 0;          // 普攻揮砍剩餘秒數
+    this.atkDur    = 0.28;       // 普攻揮砍總長
 
     // 無敵時間（受傷後短暫無敵，避免連續扣血）
     this.invincible = 0;
@@ -131,6 +136,11 @@ export class Player {
   update(delta) {
     this.move(delta);
     if (this.invincible > 0) this.invincible -= delta;
+
+    // 動畫時鐘 + 動作計時器衰減
+    this.animTime += delta;
+    if (this.castTimer > 0) this.castTimer -= delta;
+    if (this.atkTimer  > 0) this.atkTimer  -= delta;
 
     // 費用回復：每 1.1 秒回 1 點（上限 maxCost）
     if (this.cost < this.maxCost) {
@@ -157,6 +167,9 @@ export class Player {
     // 斜向正規化（避免斜向更快）
     if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
 
+    // 是否在移動 → 驅動走路動畫
+    this.moving = (dx !== 0 || dy !== 0);
+
     // 套用速度（世界座標，夾在競技場範圍內）
     this.x = clamp(this.x + dx * speed, 40, WORLD.w - 40);
     this.y = clamp(this.y + dy * speed, 40, WORLD.h - 40);
@@ -165,6 +178,10 @@ export class Player {
     const screenDir = dx - dy;
     if (Math.abs(screenDir) > 0.01) this.facing = Math.sign(screenDir);
   }
+
+  // ── 觸發動作動畫（由 combat / 輸入呼叫）──
+  playCast()   { this.castTimer = this.castDur; }
+  playAttack() { this.atkTimer  = this.atkDur; }
 
   // 受傷
   takeDamage(dmg) {
@@ -190,121 +207,25 @@ export class Player {
   // sx,sy = 螢幕上「腳底」的位置（由主迴圈投影後傳入）
   render(ctx, sx, sy) {
     const blink = this.invincible > 0 && Math.floor(this.invincible * 10) % 2 === 0;
-    const f = this.facing; // 1=右 -1=左
 
-    // 地面陰影
+    // 地面陰影（移動時略縮，做出彈跳感）
+    const shW = this.moving ? 20 : 22;
     ctx.save();
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(sx, sy, 22, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, sy, shW, 8, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    ctx.globalAlpha = blink ? 0.35 : 1;
-    ctx.save();
-    // 身體中心約在腳底上方 26px（角色高度感）
-    ctx.translate(sx, sy - 26);
-    ctx.scale(f, 1);
-
-    if (this.cls === 'varek') {
-      // 聖怒光暈
-      if (this.holyRage > 50) {
-        const g = ctx.createRadialGradient(0,0,10,0,0,36);
-        g.addColorStop(0, `rgba(255,210,80,${(this.holyRage-50)/100})`);
-        g.addColorStop(1, 'transparent');
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0,0,36,0,Math.PI*2); ctx.fill();
-      }
-      // 盾（左手）
-      ctx.fillStyle = '#8a6820'; ctx.strokeStyle = '#EFD27A'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.ellipse(-14, 4, 7, 12, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      // 身體
-      const bg = ctx.createLinearGradient(-10,-18,10,18);
-      bg.addColorStop(0,'#d4a540'); bg.addColorStop(1,'#7a5010');
-      ctx.fillStyle = bg;
-      ctx.beginPath(); ctx.roundRect(-10,-18,20,36,4); ctx.fill();
-      // 護甲紋
-      ctx.strokeStyle='rgba(255,220,100,.4)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(-8,-5); ctx.lineTo(8,-5); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-8,5); ctx.lineTo(8,5); ctx.stroke();
-      // 頭
-      const hg = ctx.createRadialGradient(-2,-24,2,-2,-24,12);
-      hg.addColorStop(0,'#f5dfa0'); hg.addColorStop(1,'#c08030');
-      ctx.fillStyle = hg;
-      ctx.beginPath(); ctx.arc(0,-26,11,0,Math.PI*2); ctx.fill();
-      // 頭盔
-      ctx.fillStyle='#EFD27A'; ctx.strokeStyle='#8a6820'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.moveTo(-12,-26); ctx.arc(0,-26,12,Math.PI,0); ctx.closePath(); ctx.fill(); ctx.stroke();
-      // 劍（右手）
-      ctx.fillStyle='#ccc'; ctx.strokeStyle='#888'; ctx.lineWidth=1;
-      ctx.fillRect(12,-22,5,28); ctx.strokeRect(12,-22,5,28);
-      ctx.fillStyle='#EFD27A'; ctx.fillRect(9,-8,11,4);
-
-    } else if (this.cls === 'lyra') {
-      // 魔法光環
-      const t = Date.now()/800;
-      for (let i=0;i<3;i++){
-        const a = t + i*2.094;
-        ctx.beginPath(); ctx.arc(Math.cos(a)*20, Math.sin(a)*20+0, 4,0,Math.PI*2);
-        ctx.fillStyle = ['rgba(100,220,255,.7)','rgba(80,180,255,.5)','rgba(150,255,220,.6)'][i];
-        ctx.fill();
-      }
-      // 法袍
-      const rg = ctx.createLinearGradient(-11,-16,11,20);
-      rg.addColorStop(0,'#2a6a8a'); rg.addColorStop(1,'#0a2030');
-      ctx.fillStyle = rg;
-      ctx.beginPath(); ctx.moveTo(-11,-16); ctx.lineTo(11,-16); ctx.lineTo(14,20); ctx.lineTo(-14,20); ctx.closePath(); ctx.fill();
-      // 法袍紋飾
-      ctx.strokeStyle='rgba(100,220,255,.5)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(8,0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(0,20); ctx.stroke();
-      // 頭
-      const lhg = ctx.createRadialGradient(0,-27,2,0,-27,11);
-      lhg.addColorStop(0,'#e0f8ff'); lhg.addColorStop(1,'#7ab8d0');
-      ctx.fillStyle=lhg; ctx.beginPath(); ctx.arc(0,-26,11,0,Math.PI*2); ctx.fill();
-      // 頭髮
-      ctx.fillStyle='#b0e8ff';
-      ctx.beginPath(); ctx.arc(0,-26,11,Math.PI,0); ctx.fill();
-      ctx.beginPath(); ctx.arc(-6,-22,5,0,Math.PI); ctx.fill();
-      // 法杖
-      ctx.strokeStyle='#7AF0EF'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.moveTo(14,-24); ctx.lineTo(14,22); ctx.stroke();
-      ctx.fillStyle='rgba(100,255,240,.9)';
-      ctx.beginPath(); ctx.arc(14,-26,6,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='#fff'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.arc(14,-26,6,0,Math.PI*2); ctx.stroke();
-
-    } else { // kael
-      // 暗影效果
-      const sg = ctx.createRadialGradient(0,0,5,0,0,32);
-      sg.addColorStop(0,'rgba(80,0,120,.4)'); sg.addColorStop(1,'transparent');
-      ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,0,32,0,Math.PI*2); ctx.fill();
-      // 身體（皮革）
-      const kg = ctx.createLinearGradient(-9,-16,9,18);
-      kg.addColorStop(0,'#2a1040'); kg.addColorStop(1,'#0d0018');
-      ctx.fillStyle=kg;
-      ctx.beginPath(); ctx.roundRect(-9,-16,18,34,3); ctx.fill();
-      // 斗篷
-      ctx.fillStyle='rgba(40,0,70,.85)';
-      ctx.beginPath(); ctx.moveTo(-12,-12); ctx.lineTo(-18,22); ctx.lineTo(-9,18); ctx.closePath(); ctx.fill();
-      // 頭
-      const khg = ctx.createRadialGradient(0,-27,2,0,-27,10);
-      khg.addColorStop(0,'#d0b0e0'); khg.addColorStop(1,'#7040a0');
-      ctx.fillStyle=khg; ctx.beginPath(); ctx.arc(0,-26,10,0,Math.PI*2); ctx.fill();
-      // 面具
-      ctx.fillStyle='rgba(20,0,40,.7)';
-      ctx.beginPath(); ctx.ellipse(0,-24,7,5,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(180,100,255,.8)';
-      ctx.beginPath(); ctx.arc(-3,-24,2,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(3,-24,2,0,Math.PI*2); ctx.fill();
-      // 匕首（右）
-      ctx.fillStyle='#B07AEF'; ctx.strokeStyle='#5a2090'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(12,-18); ctx.lineTo(18,2); ctx.lineTo(14,2); ctx.lineTo(10,-18); ctx.closePath(); ctx.fill(); ctx.stroke();
-      // 匕首（左）
-      ctx.fillStyle='#9060cf';
-      ctx.beginPath(); ctx.moveTo(-12,-10); ctx.lineTo(-18,8); ctx.lineTo(-14,8); ctx.lineTo(-10,-10); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-
-    ctx.restore();
-    ctx.globalAlpha = 1;
+    // 把動畫參數打包給 sprites.js
+    drawHero(ctx, this.cls, sx, sy, {
+      facing:   this.facing,
+      animTime: this.animTime,
+      moving:   this.moving,
+      castP:    this.castDur > 0 ? Math.max(0, this.castTimer / this.castDur) : 0,
+      attackP:  this.atkDur  > 0 ? Math.max(0, this.atkTimer  / this.atkDur)  : 0,
+      blink,
+      holyRage: this.holyRage || 0,
+    });
   }
 }
 
@@ -997,6 +918,7 @@ function setupJoystick() {
 function triggerAttack() {
   if (!Game.player) return;
   if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
+  Game.player.playAttack();   // 揮砍動畫
   import('./combat.js').then(({ performAttack }) => {
     // 攻擊離玩家最近的敵人
     performAttack(Game.player, Game.enemies, Game.player.x, Game.player.y);
@@ -1005,6 +927,7 @@ function triggerAttack() {
 
 function triggerSkill(skillKey) {
   if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
+  Game.player.playCast();     // 施法動畫
   import('./combat.js').then(({ performSkill }) => {
     performSkill(Game.player, skillKey, Game.enemies);
   });
