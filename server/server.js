@@ -34,7 +34,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://你的帳號.github.io',  // ← 換成你的實際 GitHub Pages 網址
+      'https://jiheruixi4826657.github.io',
       'http://localhost:3000',        // 本地開發用
       'http://localhost:3333',
     ],

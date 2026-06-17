@@ -792,6 +792,7 @@ export function startGame(cls, savedRun = null) {
 
   setupInput();
   setupJoystick();
+  initSkillBar(cls);   // 填入技能名稱/按鍵/Tooltip
   updateHUD();
   loadNextStage();
 
@@ -825,27 +826,34 @@ function setupInput() {
     if (k) { Game.input[k] = true; ev.preventDefault(); }
     if (Game.state === GameState.PAUSED) return;
     if (ev.key === ' ') { triggerSkill('space'); ev.preventDefault(); }
-    if (key === 'q') triggerSkill('q');
-    if (key === 'e') triggerSkill('e');
-    if (key === 'r') triggerSkill('r');
-    if (key === 'f') triggerSkill('w');
-    if (key === 'j' || key === 'k') triggerAttack();  // 普通攻擊
+    // 技能鍵：1/2/3/4（不與 WASD 移動衝突）
+    if (key === '1') triggerSkill('q');
+    if (key === '2') triggerSkill('w');
+    if (key === '3') triggerSkill('e');
+    if (key === '4') triggerSkill('r');
+    if (key === 'j' || key === 'k' || key === 'f') triggerAttack();  // 普通攻擊
   });
   window.addEventListener('keyup', ev => {
     const k = keyMap[ev.key.toLowerCase()];
     if (k) Game.input[k] = false;
   });
 
-  // 技能按鈕（手機）— touch + click 都綁，桌機也能按
-  document.querySelectorAll('.skill-btn').forEach(btn => {
+  // 技能格 + 攻擊按鈕 — touch + click 皆可觸發
+  const bindSkillEl = el => {
     const fire = ev => {
       ev.preventDefault();
-      const s = btn.dataset.skill;
+      const s = el.dataset.skill;
+      if (!s) return;
+      el.classList.add('pressing');
+      setTimeout(() => el.classList.remove('pressing'), 120);
       if (s === 'attack') triggerAttack(); else triggerSkill(s);
     };
-    btn.addEventListener('touchstart', fire, { passive: false });
-    btn.addEventListener('click', fire);
-  });
+    el.addEventListener('touchstart', fire, { passive: false });
+    el.addEventListener('click', fire);
+  };
+  document.querySelectorAll('.skill-slot').forEach(bindSkillEl);
+  const atkBtn = document.getElementById('skill-attack');
+  if (atkBtn) bindSkillEl(atkBtn);
 
   // 普通攻擊（滑鼠點擊畫面 = 攻擊最近的敵人）
   canvas.addEventListener('click', () => {
@@ -982,6 +990,49 @@ function updateHUD() {
   if (costEl) costEl.textContent = p.cost;
   if (chapEl) chapEl.textContent = `Chapter ${Game.chapter}`;
   if (stagEl) stagEl.textContent = `Stage ${Game.stage}`;
+
+  // 依費用顯示技能可用/不可用狀態
+  if (_skillDefs) {
+    ['q','w','e','r','space'].forEach(sk => {
+      const slot = document.getElementById(`skill-slot-${sk}`);
+      if (!slot) return;
+      const def = _skillDefs[sk];
+      slot.classList.toggle('no-cost', !!(def && p.cost < def.cost));
+    });
+  }
+}
+
+// ════════════════════════════════════════
+// 技能列初始化（startGame 後呼叫，動態 import 避免循環依賴）
+// ════════════════════════════════════════
+let _skillDefs = null;
+
+function initSkillBar(cls) {
+  import('./combat.js').then(({ getSkillDefs }) => {
+    _skillDefs = getSkillDefs(cls);
+    const keyLabels = { q:'1', w:'2', e:'3', r:'4', space:'Space' };
+    const typeLabels = { single:'單體', aoe:'範圍', dash:'衝刺', heal:'回復', burst:'爆發' };
+
+    Object.entries(_skillDefs).forEach(([sk, def]) => {
+      const slot = document.getElementById(`skill-slot-${sk}`);
+      if (!slot) return;
+      // 技能名稱 + 按鍵
+      const nameEl = slot.querySelector('.skill-name-label');
+      const costEl = slot.querySelector('.skill-cost-label');
+      const keyEl  = slot.querySelector('.skill-key');
+      const tipEl  = slot.querySelector('.skill-tooltip');
+      if (nameEl) nameEl.textContent = def.name;
+      if (costEl) costEl.textContent = `⚡${def.cost}`;
+      if (keyEl && keyLabels[sk]) keyEl.textContent = keyLabels[sk];
+      if (tipEl) {
+        const tl = typeLabels[def.type] || def.type;
+        tipEl.innerHTML = `<span class="tip-name">${def.name}</span>
+          <span class="tip-meta">${def.element ?? ''} · ${tl}</span>
+          <span class="tip-cost">費用 ⚡${def.cost}${def.mult ? ' &nbsp; 倍率 ×' + def.mult : ''}</span>`;
+      }
+    });
+    updateHUD(); // 刷新費用狀態
+  });
 }
 
 // ── 工具函數 ──

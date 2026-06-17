@@ -168,10 +168,44 @@ export function showCardChoice(onComplete, poolSize = 3, pickCount = 1) {
 
   choices.innerHTML = '';
   let picked = 0;
+  let pendingCard = null;   // 目前「選中待確認」的卡牌資料
+
+  // 確認按鈕
+  const confirmBtn = document.getElementById('card-confirm-btn');
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.classList.remove('ready'); }
+
+  // 確認選擇 → 真正把卡加入牌組
+  const commitPending = () => {
+    if (!pendingCard) return;
+    const pendingEl = choices.querySelector('.card.pending');
+    if (pendingEl) {
+      pendingEl.classList.remove('pending');
+      pendingEl.classList.add('selected');
+      pendingEl.style.pointerEvents = 'none';
+    }
+    RunDeck.addCard(pendingCard.id);
+    pendingCard = null;
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.classList.remove('ready'); }
+    picked++;
+
+    if (picked >= pickCount) {
+      clearInterval(timerInterval);
+      overlay.classList.add('hidden');
+      _onChoiceComplete?.();
+    }
+  };
+
+  if (confirmBtn) {
+    // 移除舊事件再綁定（避免重複）
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    newBtn.addEventListener('click', commitPending);
+  }
 
   picks.forEach((card, idx) => {
     const el = document.createElement('div');
     el.className = 'card quality-common';
+    el.dataset.cardId = card.id;
     el.style.animationDelay = `${idx * 0.08}s`;
     el.innerHTML = `
       <div class="card-cost">⚡ ${card.cost}</div>
@@ -181,21 +215,16 @@ export function showCardChoice(onComplete, poolSize = 3, pickCount = 1) {
     `;
 
     el.addEventListener('click', () => {
-      if (el.classList.contains('selected')) return;
+      if (el.classList.contains('selected')) return;  // 已確認，忽略
 
-      el.classList.add('selected');
-      el.style.borderColor = '#EF9F27';
-      el.style.pointerEvents = 'none';
-      picked++;
+      // 第一步：標記為 pending（高亮但未確認）
+      choices.querySelectorAll('.card.pending').forEach(c => c.classList.remove('pending'));
+      el.classList.add('pending');
+      pendingCard = card;
 
-      RunDeck.addCard(card.id);
-
-      if (picked >= pickCount) {
-        // 全部選完
-        clearInterval(timerInterval);
-        overlay.classList.add('hidden');
-        _onChoiceComplete?.();
-      }
+      // 亮起確認按鈕
+      const cb = document.getElementById('card-confirm-btn');
+      if (cb) { cb.disabled = false; cb.classList.add('ready'); }
     });
 
     choices.appendChild(el);
@@ -214,9 +243,14 @@ export function showCardChoice(onComplete, poolSize = 3, pickCount = 1) {
 
     if (elapsed >= totalMs) {
       clearInterval(timerInterval);
-      // 逾時：自動選第一張未選的
-      const unselected = choices.querySelector('.card:not(.selected)');
-      if (unselected) unselected.click();
+      // 逾時：若有 pending 就確認，否則自動選第一張
+      if (pendingCard) {
+        commitPending();
+      } else {
+        const first = choices.querySelector('.card:not(.selected)');
+        if (first) first.click();
+        setTimeout(commitPending, 50);
+      }
     }
   }, interval);
 }

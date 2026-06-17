@@ -106,6 +106,42 @@
   flex: 1;
 }
 
+/* ── 待確認狀態（第一步點擊後） ── */
+.card.pending {
+  border-color: #EF9F27;
+  box-shadow: 0 0 20px rgba(239,159,39,.45), inset 0 0 12px rgba(239,159,39,.1);
+  transform: translateY(-10px) scale(1.04);
+}
+.card.selected {
+  border-color: #27ae60;
+  opacity: .55;
+  pointer-events: none;
+  transform: none;
+}
+
+/* ── 確認選擇按鈕 ── */
+#card-confirm-btn {
+  padding: 12px 40px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid rgba(239,159,39,.3);
+  background: rgba(20,12,40,.9);
+  color: #6a5a80;
+  cursor: not-allowed;
+  transition: background .2s, border-color .2s, color .2s, transform .1s, box-shadow .2s;
+  letter-spacing: .06em;
+}
+#card-confirm-btn.ready {
+  background: linear-gradient(135deg, #b8730a, #EF9F27);
+  border-color: #EF9F27;
+  color: #1a0e00;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(239,159,39,.4);
+}
+#card-confirm-btn.ready:hover { filter: brightness(1.12); }
+#card-confirm-btn.ready:active { transform: scale(.95); }
+
 /* 隊友選擇狀態 */
 #card-teammate-status {
   display: flex;

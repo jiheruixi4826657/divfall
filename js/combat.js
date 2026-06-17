@@ -242,4 +242,6 @@ function getSkillDef(cls, key) {
   return SKILL_DEFS[cls]?.[key] || null;
 }
 
+export function getSkillDefs(cls) { return SKILL_DEFS[cls] || {}; }
+
 export { getElementMult, ELEMENT_TABLE };

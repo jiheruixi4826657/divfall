@@ -129,14 +129,42 @@
         <div id="hud-cost">⚡ 費用：<span id="hud-cost-val">3</span></div>
       </div>
 
-      <!-- 右下：技能按鈕（手機用） -->
+      <!-- 下方技能列（桌機鍵盤 1234 / 手機觸碰皆可） -->
       <div id="hud-skills">
-        <button class="skill-btn" id="skill-q" data-skill="q">Q</button>
-        <button class="skill-btn" id="skill-w" data-skill="w">W</button>
-        <button class="skill-btn" id="skill-e" data-skill="e">E</button>
-        <button class="skill-btn" id="skill-r" data-skill="r">R</button>
-        <button class="skill-btn" id="skill-space" data-skill="space">閃</button>
-        <button class="skill-btn" id="skill-attack" data-skill="attack">攻</button>
+        <!-- 技能 1~4 -->
+        <div class="skill-slot" id="skill-slot-q" data-skill="q">
+          <div class="skill-key">1</div>
+          <div class="skill-name-label">—</div>
+          <div class="skill-cost-label">⚡0</div>
+          <div class="skill-tooltip"></div>
+        </div>
+        <div class="skill-slot" id="skill-slot-w" data-skill="w">
+          <div class="skill-key">2</div>
+          <div class="skill-name-label">—</div>
+          <div class="skill-cost-label">⚡0</div>
+          <div class="skill-tooltip"></div>
+        </div>
+        <div class="skill-slot" id="skill-slot-e" data-skill="e">
+          <div class="skill-key">3</div>
+          <div class="skill-name-label">—</div>
+          <div class="skill-cost-label">⚡0</div>
+          <div class="skill-tooltip"></div>
+        </div>
+        <div class="skill-slot" id="skill-slot-r" data-skill="r">
+          <div class="skill-key">4</div>
+          <div class="skill-name-label">—</div>
+          <div class="skill-cost-label">⚡0</div>
+          <div class="skill-tooltip"></div>
+        </div>
+        <!-- 閃避 -->
+        <div class="skill-slot skill-slot-dash" id="skill-slot-space" data-skill="space">
+          <div class="skill-key">Space</div>
+          <div class="skill-name-label">閃避</div>
+          <div class="skill-cost-label">⚡1</div>
+          <div class="skill-tooltip"></div>
+        </div>
+        <!-- 普通攻擊（手機按鈕） -->
+        <button class="skill-atk-btn" id="skill-attack" data-skill="attack">攻<br><small>J/點擊</small></button>
       </div>
 
       <!-- 虛擬搖桿（手機用） -->
@@ -158,6 +186,8 @@
       <div id="card-overlay-title">選擇一張卡牌</div>
       <div id="card-timer-bar"><div id="card-timer-fill"></div></div>
       <div id="card-choices"></div>
+      <!-- 二次確認按鈕：點卡片後才亮起 -->
+      <button id="card-confirm-btn" disabled>✓ 確認選擇</button>
       <div id="card-teammate-status"></div>
     </div>
   </div>
