@@ -1,283 +1,235 @@
 /**
- * sprites.js  ──  角色「向量作畫 + 動畫」模組
+ * sprites.js  ──  側視角角色作畫（橫向 2D / 死亡細胞風佔位圖）
  * ════════════════════════════════════════════════════════════════
- * 這裡集中所有「玩家角色」的繪製。全部用 Canvas 即時繪製向量形狀，
- * 不依賴任何圖檔，所以 60fps 很順、檔案也小。
+ * 純 Canvas 程式繪製的「佔位角色」。之後 user 會用像素圖 / AI 圖替換，
+ * 替換方式：把 drawHero 內部換成 ctx.drawImage(spriteSheet, ...) 即可，
+ * 對外簽名 drawHero(ctx, cls, x, y, pose) 不變，遊戲邏輯不用動。
  *
- * 【你要改美術，改這個檔就好，不會動到遊戲邏輯】
- *  - 想改顏色 → 找各職業的 COLORS 區塊
- *  - 想改體型/武器 → 改對應的 draw 函數內的座標
- *  - 想調動畫幅度 → 改 pose 計算（在 game.js 的 Player.render 裡）
+ * 座標：(x, y) = 角色「腳底中心」在畫面上的位置；身體往上(負 y)畫。
+ * pose 欄位：
+ *   facing   1=面右 / -1=面左
+ *   animTime 累積秒數（驅動走路/呼吸週期）
+ *   state    'idle'|'run'|'jump'|'fall'|'roll'|'attack'（沒給就由 moving 推斷）
+ *   moving   (相容舊版) true→run
+ *   attackP / castP  0~1 攻擊/施法進度（1=剛揮出）
+ *   blink    無敵閃爍
+ *   holyRage VAREK 聖怒火焰強度 0~100
  *
- * 座標系：呼叫端會先把「腳底」對到 (sx,sy)，這裡以「腳底為原點 y=0」往上畫，
- *  頭大約在 y=-54。facing=1 朝右、-1 朝左（自動鏡像）。
+ * 【想改體型/顏色/武器，改這裡】COLORS 改配色；各 draw* 函式改造型。
  * ════════════════════════════════════════════════════════════════
  */
 
-// 緩動：讓攻擊/施法揮動有「快出慢收」的手感
-const easeOut = t => 1 - Math.pow(1 - t, 3);
+const COLORS = {
+  varek: { skin:'#e8b88a', main:'#d8a23a', dark:'#7a5410', steel:'#cfd6e0', cloak:'#8a1f2a', glow:'#ffd070' },
+  lyra:  { skin:'#e6c4a0', main:'#6a5acd', dark:'#2a2060', steel:'#b0a0ff', cloak:'#3a2a7a', glow:'#7af0ff' },
+  kael:  { skin:'#d8b894', main:'#3a2f4a', dark:'#15101f', steel:'#9a8abf', cloak:'#1f1830', glow:'#b07aef' },
+};
 
-/**
- * 主入口：畫一個英雄
- * @param ctx    Canvas context
- * @param cls    'varek' | 'lyra' | 'kael'
- * @param sx,sy  螢幕上腳底座標
- * @param pose   {
- *    facing, animTime, moving,
- *    castP,    // 0~1 施法進度（0=無）
- *    attackP,  // 0~1 普攻揮砍進度（0=無）
- *    blink,    // 受傷閃爍
- *    holyRage  // VAREK 聖怒 0~100
- *  }
- */
-export function drawHero(ctx, cls, sx, sy, pose) {
-  const p = pose || {};
-  const t        = p.animTime || 0;
-  const moving   = !!p.moving;
-  const facing   = p.facing >= 0 ? 1 : -1;
-  const castP    = p.castP   || 0;
-  const attackP  = p.attackP || 0;
-
-  // ── 共用動畫參數 ──
-  const walk   = moving ? Math.sin(t * 11) : 0;                  // 走路相位 -1~1
-  const bob    = moving ? -Math.abs(Math.sin(t * 11)) * 3        // 走路上下彈跳
-                        :  Math.sin(t * 2.4) * 1.4;              // 待機呼吸
-  const lean   = (moving ? 0.09 : 0) + attackP * 0.12;          // 前傾（移動/攻擊）
-  const legA   = walk * 0.5;                                     // 腿擺動角
-  // 武器揮動角：普攻時從上往下大幅斬擊；施法時舉起
-  const slash  = Math.sin(easeOut(attackP) * Math.PI);          // 0→1→0 的揮砍包絡
-  const weaponA = -walk * 0.25                                   // 走路時輕微擺
-                  - slash * 2.2                                  // 普攻大揮砍
-                  - castP * 1.3;                                 // 施法舉起
-
-  ctx.save();
-  ctx.globalAlpha = p.blink ? 0.35 : 1;
-  ctx.translate(sx, sy);
-  ctx.rotate(lean * facing * 0.5);   // 整體前傾
-  ctx.scale(facing, 1);
-  ctx.translate(0, bob);
-
-  if (cls === 'varek')      drawVarek(ctx, { t, legA, weaponA, slash, castP, holyRage: p.holyRage || 0 });
-  else if (cls === 'lyra')  drawLyra (ctx, { t, legA, weaponA, slash, castP });
-  else                      drawKael (ctx, { t, legA, weaponA, slash, castP });
-
-  ctx.restore();
+// 粗線條肢體（圓頭線段）
+function limb(ctx, x1, y1, x2, y2, w, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
 }
 
-// 畫兩條會擺動的腿（共用）
-function drawLegs(ctx, legA, colDark, colMid) {
-  ctx.save();
-  // 後腿
-  ctx.fillStyle = colDark;
-  ctx.save(); ctx.translate(-4, -14); ctx.rotate(-legA);
-  ctx.beginPath(); ctx.roundRect(-4, 0, 8, 16, 3); ctx.fill(); ctx.restore();
-  // 前腿
-  ctx.fillStyle = colMid;
-  ctx.save(); ctx.translate(4, -14); ctx.rotate(legA);
-  ctx.beginPath(); ctx.roundRect(-4, 0, 8, 16, 3); ctx.fill(); ctx.restore();
-  ctx.restore();
-}
+export function drawHero(ctx, cls, x, y, pose = {}) {
+  const C = COLORS[cls] || COLORS.varek;
+  const facing = pose.facing >= 0 ? 1 : -1;
+  const t = pose.animTime || 0;
+  const atk = Math.max(pose.attackP || 0, pose.castP || 0);
 
-/* ══════════════════════════════════════════════════════════
-   VAREK 斷神騎 ── 兇悍重甲、有角戰盔、巨劍、聖怒火焰
-   COLORS：改這裡換配色
-══════════════════════════════════════════════════════════ */
-function drawVarek(ctx, a) {
-  const C = { gold:'#f0c24a', goldD:'#9c6a10', steel:'#cdd6e0', dark:'#3a2c10', cape:'#7a1418', skin:'#e8b890', eye:'#fff6c0' };
-
-  // 聖怒火焰光暈
-  if (a.holyRage > 30) {
-    const k = (a.holyRage - 30) / 70;
-    for (let i = 0; i < 5; i++) {
-      const fa = a.t * 6 + i * 1.25;
-      const fx = Math.cos(fa) * 16, fy = -26 + Math.sin(a.t * 8 + i) * 14;
-      ctx.fillStyle = `rgba(255,${150 + i * 18},40,${0.25 * k})`;
-      ctx.beginPath(); ctx.ellipse(fx, fy, 6, 11, 0, 0, Math.PI * 2); ctx.fill();
-    }
+  // 推斷狀態
+  let state = pose.state;
+  if (!state) {
+    if (atk > 0)          state = 'attack';
+    else if (pose.moving) state = 'run';
+    else                  state = 'idle';
   }
 
-  // 披風（在身後，會飄）
-  const cw = Math.sin(a.t * 4) * 3;
-  ctx.fillStyle = C.cape;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(facing, 1);   // 面左時整體水平翻轉
+
+  if (pose.blink) ctx.globalAlpha = 0.45;
+
+  // ── 翻滾：畫成蜷曲的球，旋轉 ──
+  if (state === 'roll') {
+    const spin = (t * 16) % (Math.PI * 2);
+    ctx.save();
+    ctx.translate(0, -16);
+    ctx.rotate(spin);
+    ctx.fillStyle = C.cloak;
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.main;
+    ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.steel;
+    ctx.beginPath(); ctx.arc(5, -3, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+
+  // 走路週期 / 呼吸
+  const run   = state === 'run';
+  const air   = state === 'jump' || state === 'fall';
+  const cyc   = Math.sin(t * 14);
+  const cyc2  = Math.cos(t * 14);
+  const breath = Math.sin(t * 2.5) * 1.2;
+
+  // 關鍵高度（腳底=0，往上為負）
+  const hipY  = -26 + (run ? Math.abs(cyc) * -2 : 0) + (air ? -2 : 0);
+  const shY   = hipY - 16 + (run ? 0 : breath * 0.4);
+  const headY = shY - 12;
+
+  // ── 腿 ──
+  let frontFoot, backFoot;
+  if (air) {
+    // 跳/落：前腿收、後腿伸
+    frontFoot = { x: 6,  y: state === 'jump' ? -10 : -2 };
+    backFoot  = { x: -8, y: -4 };
+  } else if (run) {
+    frontFoot = { x: 9 + cyc * 8,  y: -Math.max(0, cyc) * 6 };
+    backFoot  = { x: -9 - cyc * 8, y: -Math.max(0, -cyc) * 6 };
+  } else {
+    frontFoot = { x: 7,  y: 0 };
+    backFoot  = { x: -7, y: 0 };
+  }
+  limb(ctx, -2, hipY, backFoot.x,  backFoot.y,  7, C.dark);   // 後腿（較暗）
+  limb(ctx,  2, hipY, frontFoot.x, frontFoot.y, 7, C.main);   // 前腿
+
+  // ── 披風/外袍（在身體後面）──
+  ctx.fillStyle = C.cloak;
   ctx.beginPath();
-  ctx.moveTo(-8, -44); ctx.quadraticCurveTo(-20 + cw, -20, -14 + cw, -2);
-  ctx.lineTo(6, -6); ctx.lineTo(4, -44); ctx.closePath(); ctx.fill();
+  ctx.moveTo(-3, shY + 1);
+  ctx.quadraticCurveTo(-14 - (run ? cyc2 * 4 : 0), hipY, -8, hipY + 8);
+  ctx.lineTo(2, hipY);
+  ctx.closePath();
+  ctx.fill();
 
-  // 腿
-  drawLegs(ctx, a.legA, C.goldD, C.gold);
-
-  // 盾（左手）
-  ctx.fillStyle = C.goldD; ctx.strokeStyle = C.gold; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.ellipse(-15, -22, 8, 13, -0.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,230,140,.6)';
-  ctx.beginPath(); ctx.moveTo(-15, -30); ctx.lineTo(-15, -14); ctx.stroke();
-
-  // 軀幹（重甲）
-  const bg = ctx.createLinearGradient(-12, -44, 12, -12);
-  bg.addColorStop(0, C.gold); bg.addColorStop(1, C.goldD);
-  ctx.fillStyle = bg; ctx.strokeStyle = C.dark; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.roundRect(-12, -44, 24, 34, 5); ctx.fill(); ctx.stroke();
-  // 胸口聖紋
-  ctx.strokeStyle = 'rgba(255,240,180,.7)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(0, -30, 5, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(0, -22); ctx.moveTo(-7, -30); ctx.lineTo(7, -30); ctx.stroke();
-  // 尖刺肩甲
+  // ── 軀幹 ──
+  ctx.fillStyle = C.main;
+  roundRect(ctx, -7, shY, 14, (hipY - shY) + 4, 5);
+  ctx.fill();
+  // 胸甲高光
   ctx.fillStyle = C.steel;
-  ctx.beginPath(); ctx.moveTo(-13, -44); ctx.lineTo(-18, -50); ctx.lineTo(-9, -42); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(13, -44); ctx.lineTo(18, -50); ctx.lineTo(9, -42); ctx.closePath(); ctx.fill();
+  roundRect(ctx, -4, shY + 2, 8, 9, 3);
+  ctx.fill();
 
-  // 頭 + 有角戰盔
-  ctx.fillStyle = C.skin;
-  ctx.beginPath(); ctx.arc(0, -52, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = C.gold; ctx.strokeStyle = C.goldD; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(0, -54, 10, Math.PI, 0); ctx.lineTo(9, -50); ctx.lineTo(-9, -50); ctx.closePath(); ctx.fill(); ctx.stroke();
-  // 牛角
-  ctx.beginPath(); ctx.moveTo(-9, -58); ctx.quadraticCurveTo(-18, -64, -14, -52); ctx.quadraticCurveTo(-12, -58, -9, -58); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(9, -58); ctx.quadraticCurveTo(18, -64, 14, -52); ctx.quadraticCurveTo(12, -58, 9, -58); ctx.fill();
-  // 發光眼縫
-  ctx.fillStyle = C.eye;
-  ctx.fillRect(-7, -52, 14, 2.5);
-
-  // 巨劍（右手，會揮砍）
-  ctx.save();
-  ctx.translate(11, -30);
-  ctx.rotate(a.weaponA);
-  // 揮砍殘影
-  if (a.slash > 0.15) {
-    ctx.strokeStyle = `rgba(255,240,180,${a.slash * 0.6})`; ctx.lineWidth = 6; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, 0, 30, -1.0, 0.6); ctx.stroke();
+  // ── 持武器手臂（attack 時前擺）──
+  const swing = atk > 0 ? (1 - atk) : 0;             // 0→1 揮出
+  const armBase = { x: 4, y: shY + 3 };
+  let handX, handY;
+  if (atk > 0) {
+    const ang = -1.4 + swing * 2.8;                   // 從上往下劈
+    handX = armBase.x + Math.cos(ang) * 16;
+    handY = armBase.y + Math.sin(ang) * 16;
+  } else if (run) {
+    handX = armBase.x + 8 + cyc2 * 4;
+    handY = armBase.y + 8;
+  } else {
+    handX = armBase.x + 7;
+    handY = armBase.y + 10 + breath * 0.3;
   }
-  ctx.fillStyle = C.steel; ctx.strokeStyle = '#8893a0'; ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-3, 4); ctx.lineTo(3, 4); ctx.lineTo(3, -34); ctx.lineTo(0, -40); ctx.lineTo(-3, -34); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = C.gold; ctx.fillRect(-7, 2, 14, 4);            // 護手
-  ctx.fillStyle = C.goldD; ctx.fillRect(-2, 6, 4, 9);           // 握把
-  ctx.restore();
-}
+  limb(ctx, armBase.x, armBase.y, handX, handY, 6, C.main);
 
-/* ══════════════════════════════════════════════════════════
-   LYRA 術式者 ── 兜帽戰袍、發光眼、環繞元素球、施法時法杖前刺
-══════════════════════════════════════════════════════════ */
-function drawLyra(ctx, a) {
-  const C = { robe:'#1f6b7a', robeD:'#0a2230', trim:'#3fd8c8', hair:'#9fe8e0', skin:'#f0d0b0', glow:'#7af0ff' };
+  // ── 武器（依職業）──
+  drawWeapon(ctx, cls, C, handX, handY, atk, swing);
 
-  // 環繞元素球（施法時轉更快、更亮）
-  const spin = a.t * (2 + a.castP * 6);
-  const elem = ['#ff8a3c', '#9fe8ff', '#f5e663']; // 火 冰 雷
-  for (let i = 0; i < 3; i++) {
-    const ang = spin + i * 2.094;
-    const ex = Math.cos(ang) * 22, ey = -28 + Math.sin(ang) * 10;
-    ctx.fillStyle = elem[i];
-    ctx.globalAlpha = 0.9;
-    ctx.beginPath(); ctx.arc(ex, ey, 4 + a.castP * 2, 0, Math.PI * 2); ctx.fill();
+  // ── 頭 ──
+  ctx.fillStyle = C.skin;
+  ctx.beginPath(); ctx.arc(2, headY, 8, 0, Math.PI * 2); ctx.fill();
+  drawHeadGear(ctx, cls, C, headY);
+  // 眼睛（面向側邊）
+  ctx.fillStyle = C.glow;
+  ctx.beginPath(); ctx.arc(7, headY - 1, 1.6, 0, Math.PI * 2); ctx.fill();
+
+  // ── VAREK 聖怒火焰 ──
+  if (cls === 'varek' && (pose.holyRage || 0) > 40) {
+    const k = Math.min(1, (pose.holyRage - 40) / 60);
+    ctx.globalAlpha = 0.5 * k;
+    for (let i = 0; i < 4; i++) {
+      const fx = -6 + i * 4;
+      const fy = shY - 4 - Math.abs(Math.sin(t * 8 + i)) * 8;
+      ctx.fillStyle = i % 2 ? '#ffd070' : '#ff7a30';
+      ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
 
-  // 腿（戰靴）
-  drawLegs(ctx, a.legA, '#10303a', '#1f5560');
-
-  // 戰袍（下襬會飄）
-  const sway = Math.sin(a.t * 5) * 3;
-  const rg = ctx.createLinearGradient(0, -42, 0, -2);
-  rg.addColorStop(0, C.robe); rg.addColorStop(1, C.robeD);
-  ctx.fillStyle = rg;
-  ctx.beginPath();
-  ctx.moveTo(-10, -42); ctx.lineTo(10, -42);
-  ctx.lineTo(14 + sway, -2); ctx.lineTo(-14 + sway, -2); ctx.closePath(); ctx.fill();
-  // 袍上發光符文線
-  ctx.strokeStyle = 'rgba(80,230,220,.6)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-7, -24); ctx.lineTo(7, -24); ctx.stroke();
-
-  // 兜帽 + 頭
-  ctx.fillStyle = C.skin;
-  ctx.beginPath(); ctx.arc(0, -50, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = C.robe; ctx.strokeStyle = C.trim; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(-11, -44); ctx.quadraticCurveTo(0, -64, 11, -44);
-  ctx.quadraticCurveTo(6, -52, 0, -53); ctx.quadraticCurveTo(-6, -52, -11, -44); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  // 發光雙眼
-  ctx.fillStyle = C.glow;
-  ctx.beginPath(); ctx.arc(-3, -50, 1.8, 0, Math.PI * 2); ctx.arc(3, -50, 1.8, 0, Math.PI * 2); ctx.fill();
-
-  // 法杖（右手，施法時往前刺、杖頭爆亮）
-  ctx.save();
-  ctx.translate(12, -30);
-  ctx.rotate(a.weaponA * 0.5 - 0.1 - a.castP * 0.5);
-  ctx.strokeStyle = '#0d8a86'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -26); ctx.stroke();
-  const orbR = 6 + a.castP * 5;
-  ctx.fillStyle = `rgba(120,255,240,${0.4 + a.castP * 0.5})`;
-  ctx.beginPath(); ctx.arc(0, -28, orbR + 4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#bfffff';
-  ctx.beginPath(); ctx.arc(0, -28, orbR, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
-/* ══════════════════════════════════════════════════════════
-   KAEL 影刃者 ── 深兜帽、發光裂眼、飄動斗篷、雙匕首交叉斬
-══════════════════════════════════════════════════════════ */
-function drawKael(ctx, a) {
-  const C = { leather:'#241433', leatherD:'#0d0018', cloak:'#1a0e28', purple:'#b07aef', purpleD:'#5a2090', eye:'#d8a0ff', skin:'#b89ac8' };
-
-  // 暗影煙霧
-  for (let i = 0; i < 4; i++) {
-    const sa = a.t * 3 + i * 1.6;
-    ctx.fillStyle = `rgba(110,40,170,${0.12})`;
-    ctx.beginPath(); ctx.ellipse(Math.cos(sa) * 14, -18 + Math.sin(sa) * 16, 9, 9, 0, 0, Math.PI * 2); ctx.fill();
+// ── 武器造型 ──
+function drawWeapon(ctx, cls, C, hx, hy, atk, swing) {
+  ctx.save();
+  ctx.translate(hx, hy);
+  if (cls === 'varek') {
+    // 巨劍
+    const ang = atk > 0 ? (-1.0 + swing * 2.6) : -0.5;
+    ctx.rotate(ang);
+    ctx.fillStyle = C.steel;
+    roundRect(ctx, -2, -34, 4, 34, 2); ctx.fill();        // 劍身
+    ctx.fillStyle = C.main;
+    roundRect(ctx, -7, -2, 14, 4, 2); ctx.fill();         // 護手
+    if (atk > 0) { // 揮砍殘影
+      ctx.globalAlpha = 0.3; ctx.strokeStyle = C.glow; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 30, -1.2, 0.6); ctx.stroke();
+    }
+  } else if (cls === 'lyra') {
+    // 法杖 + 元素球
+    ctx.rotate(atk > 0 ? -0.3 + swing * 0.6 : 0.2);
+    ctx.fillStyle = C.dark;
+    roundRect(ctx, -1.5, -30, 3, 32, 1.5); ctx.fill();
+    const og = ctx.createRadialGradient(0, -32, 1, 0, -32, 7);
+    og.addColorStop(0, '#fff'); og.addColorStop(0.5, C.glow); og.addColorStop(1, 'transparent');
+    ctx.fillStyle = og;
+    ctx.beginPath(); ctx.arc(0, -32, 7, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // 雙匕首
+    ctx.rotate(atk > 0 ? -1.2 + swing * 2.0 : -0.3);
+    ctx.fillStyle = C.steel;
+    roundRect(ctx, -1.5, -16, 3, 16, 1.5); ctx.fill();
+    ctx.fillStyle = C.main;
+    roundRect(ctx, -4, -2, 8, 3, 1.5); ctx.fill();
+    if (atk > 0) { ctx.globalAlpha = 0.3; ctx.strokeStyle = C.glow; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 18, -1.4, 0.4); ctx.stroke(); }
   }
-
-  // 飄動斗篷（在身後）
-  const cw = Math.sin(a.t * 5) * 5;
-  ctx.fillStyle = C.cloak;
-  ctx.beginPath();
-  ctx.moveTo(-9, -42); ctx.quadraticCurveTo(-22 + cw, -18, -16 + cw, 0);
-  ctx.lineTo(8, -4); ctx.lineTo(5, -42); ctx.closePath(); ctx.fill();
-
-  // 腿
-  drawLegs(ctx, a.legA, '#180a28', '#2c1648');
-
-  // 軀幹（皮甲）
-  const kg = ctx.createLinearGradient(-9, -42, 9, -10);
-  kg.addColorStop(0, C.leather); kg.addColorStop(1, C.leatherD);
-  ctx.fillStyle = kg; ctx.strokeStyle = C.purpleD; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(-9, -42, 18, 32, 4); ctx.fill(); ctx.stroke();
-  // 交叉皮帶
-  ctx.strokeStyle = 'rgba(160,110,230,.5)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-8, -40); ctx.lineTo(8, -16); ctx.moveTo(8, -40); ctx.lineTo(-8, -16); ctx.stroke();
-
-  // 深兜帽 + 頭
-  ctx.fillStyle = C.skin;
-  ctx.beginPath(); ctx.arc(0, -50, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = C.cloak; ctx.strokeStyle = C.purpleD; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(-12, -42); ctx.quadraticCurveTo(0, -66, 12, -42);
-  ctx.quadraticCurveTo(7, -50, 0, -51); ctx.quadraticCurveTo(-7, -50, -12, -42); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  // 兜帽內陰影
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  ctx.beginPath(); ctx.ellipse(0, -49, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-  // 發光裂眼
-  ctx.fillStyle = C.eye;
-  ctx.beginPath(); ctx.moveTo(-5, -50); ctx.lineTo(-1, -49); ctx.lineTo(-5, -48); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(5, -50); ctx.lineTo(1, -49); ctx.lineTo(5, -48); ctx.closePath(); ctx.fill();
-
-  // 雙匕首（攻擊時交叉斬）
-  const da = a.weaponA;
-  // 右手匕首
-  ctx.save(); ctx.translate(10, -28); ctx.rotate(da);
-  if (a.slash > 0.15) { ctx.strokeStyle = `rgba(176,122,239,${a.slash*0.7})`; ctx.lineWidth=5; ctx.lineCap='round';
-    ctx.beginPath(); ctx.arc(0,0,22,-0.9,0.7); ctx.stroke(); }
-  drawDagger(ctx, C.purple, C.purpleD); ctx.restore();
-  // 左手匕首（反向斬）
-  ctx.save(); ctx.translate(-8, -24); ctx.rotate(-da * 0.8 + 0.3);
-  drawDagger(ctx, '#8a5cc0', C.purpleD); ctx.restore();
+  ctx.restore();
 }
 
-function drawDagger(ctx, col, colD) {
-  ctx.fillStyle = col; ctx.strokeStyle = colD; ctx.lineWidth = 1;
+// ── 頭盔/兜帽 ──
+function drawHeadGear(ctx, cls, C, headY) {
+  if (cls === 'varek') {
+    // 有角頭盔
+    ctx.fillStyle = C.steel;
+    roundRect(ctx, -6, headY - 9, 16, 8, 3); ctx.fill();
+    ctx.fillStyle = C.main;
+    ctx.beginPath(); ctx.moveTo(8, headY - 6); ctx.lineTo(14, headY - 12); ctx.lineTo(9, headY - 7); ctx.fill(); // 角
+  } else {
+    // 兜帽
+    ctx.fillStyle = C.cloak;
+    ctx.beginPath();
+    ctx.moveTo(-7, headY + 4);
+    ctx.quadraticCurveTo(-8, headY - 11, 4, headY - 11);
+    ctx.quadraticCurveTo(11, headY - 9, 10, headY + 2);
+    ctx.lineTo(6, headY + 1);
+    ctx.quadraticCurveTo(6, headY - 7, -1, headY - 7);
+    ctx.quadraticCurveTo(-5, headY - 6, -4, headY + 4);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+// 圓角矩形工具
+function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
-  ctx.moveTo(-2.5, 3); ctx.lineTo(2.5, 3); ctx.lineTo(1.5, -20); ctx.lineTo(0, -24); ctx.lineTo(-1.5, -20); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = colD; ctx.fillRect(-4, 2, 8, 3);
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }

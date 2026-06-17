@@ -153,15 +153,16 @@ function applyDamage(enemy, damage, isCrit, element = '物理') {
   const wasAlive = enemy.alive;
   enemy.takeDamage(damage);
 
-  // 打擊特效（粒子/震屏/閃光），顏色依屬性
+  // 打擊特效對到敵人「身體中心」（enemy.y 是腳底，往上抬半個身高）
+  const bx = enemy.x, by = enemy.y - (enemy.h || 40) * 0.5;
   const color = ELEMENT_COLOR[element] || '#ffffff';
-  if (wasAlive && !enemy.alive)      fxDeath(enemy.x, enemy.y, color);
-  else if (isCrit)                   fxBigHit(enemy.x, enemy.y, color);
-  else                               fxHit(enemy.x, enemy.y, color, Math.min(3, 1 + damage / 400));
+  if (wasAlive && !enemy.alive)      fxDeath(bx, by, color);
+  else if (isCrit)                   fxBigHit(bx, by, color);
+  else                               fxHit(bx, by, color, Math.min(3, 1 + damage / 400));
 
-  // enemy.x/y 是世界座標 → 投影成螢幕座標再顯示
-  const s = worldToScreen(enemy.x, enemy.y);
-  showDamageNumber(s.x, s.y - enemy.h - 24, damage, isCrit);
+  // 世界座標 → 螢幕座標再顯示傷害數字
+  const s = worldToScreen(bx, by);
+  showDamageNumber(s.x, s.y - 24, damage, isCrit);
 }
 
 // ════════════════════════════════════════
@@ -243,5 +244,18 @@ function getSkillDef(cls, key) {
 }
 
 export function getSkillDefs(cls) { return SKILL_DEFS[cls] || {}; }
+
+// ════════════════════════════════════════
+// 近戰命中（給 game.js 的 2D 揮砍判定呼叫）
+// 一次完整流程：算傷害 → 套用 → 特效/數字 → 音效 → 頓停
+// ════════════════════════════════════════
+export function meleeHit(player, enemy, mult = 1.0, element = null) {
+  const el = element || getPlayerElement(player.cls);
+  const { damage, isCrit } = calcDamage(player, enemy, mult, el);
+  applyDamage(enemy, damage, isCrit, el);
+  playSFX(isCrit ? 'crit' : 'hit_light');
+  hitStop(isCrit ? 0.06 : 0.03);
+  return { damage, isCrit };
+}
 
 export { getElementMult, ELEMENT_TABLE };

@@ -259,23 +259,105 @@
   100% { opacity: 0; transform: translateY(-60px) scale(.9); }
 }
 
-/* ── PC 模式：隱藏虛擬搖桿，但保留技能列 ── */
-@media (hover: hover) and (pointer: fine) {
-  #joystick-zone { display: none; }
-  /* 技能列在桌機維持顯示，作為鍵盤提示 + 費用參考 */
+/* ── 區域肅清提示 toast ── */
+@keyframes toastfade {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
 }
 
-/* ── 手機：技能列左移，避開搖桿 ── */
-@media (max-width: 600px), (pointer: coarse) {
+/* ══════════════════════════════════════
+   手機觸控墊（左右移動 + 跳 + 滾）
+══════════════════════════════════════ */
+#mobile-pad {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+}
+#mobile-pad .mb-move, #mobile-pad .mb-act { display: flex; gap: 12px; pointer-events: all; }
+.mb-btn {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  background: rgba(15,10,28,.7);
+  border: 2px solid rgba(239,159,39,.4);
+  color: #E8E0F8;
+  font-size: 1.5rem;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  user-select: none;
+}
+.mb-btn.pressing, .mb-btn:active { background: rgba(239,159,39,.3); border-color: #EF9F27; transform: scale(.94); }
+.mb-jump { background: rgba(40,80,140,.65); border-color: rgba(100,170,255,.5); }
+.mb-roll { background: rgba(100,60,140,.6); border-color: rgba(180,120,255,.5); }
+
+/* ── PC 模式：隱藏所有觸控控制，保留技能列當鍵盤提示 ── */
+@media (hover: hover) and (pointer: fine) {
+  #mobile-pad { display: none; }
+}
+
+/* ── 觸控裝置：技能列縮小靠右、顯示觸控墊 ── */
+@media (max-width: 820px), (pointer: coarse) {
   #hud-skills {
     left: auto;
     right: 8px;
+    bottom: 90px;
     transform: none;
     flex-wrap: wrap;
-    width: 160px;
+    width: 168px;
     justify-content: flex-end;
   }
-  .skill-slot { width: 60px; min-height: 62px; }
-  .skill-atk-btn { width: 56px; min-height: 62px; }
-  .skill-tooltip { display: none; } /* 手機不顯示 tooltip */
+  .skill-slot { width: 58px; min-height: 60px; }
+  .skill-atk-btn { width: 54px; min-height: 60px; }
+  .skill-tooltip { display: none; }
+  #hud-player { bottom: 160px; }
 }
+
+/* ══════════════════════════════════════
+   按鍵設定面板（keybindui.js）
+══════════════════════════════════════ */
+#keybind-overlay {
+  position: fixed; inset: 0; z-index: 250;
+  background: rgba(6,3,14,.82);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+}
+#keybind-box {
+  background: rgba(18,12,32,.97);
+  border: 1px solid rgba(239,159,39,.4);
+  border-radius: 14px;
+  padding: 24px 26px;
+  width: min(420px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+}
+#keybind-box h2 { color: #EF9F27; font-size: 1.4rem; margin-bottom: 4px; letter-spacing: .08em; }
+.kb-hint { font-size: .8rem; color: #9080b0; margin-bottom: 14px; }
+.kb-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.kb-label { font-size: .95rem; color: #E8E0F8; }
+.kb-key {
+  min-width: 96px; padding: 7px 14px;
+  background: rgba(8,4,18,.9);
+  border: 1px solid rgba(239,159,39,.45);
+  border-radius: 7px;
+  color: #EF9F27; font-weight: 700; font-size: .85rem;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.kb-key:hover { background: rgba(239,159,39,.12); }
+.kb-key.kb-wait { background: rgba(239,159,39,.25); border-color: #EF9F27; color: #fff; animation: kbwait .8s ease-in-out infinite; }
+@keyframes kbwait { 50% { opacity: .55; } }
+.kb-actions { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }
+.kb-btn {
+  padding: 10px 22px; border-radius: 8px; cursor: pointer; font-weight: 700;
+  background: rgba(20,15,35,.9); border: 1px solid #5a4080; color: #E8E0F8;
+}
+.kb-btn.kb-main { background: linear-gradient(135deg,#b8730a,#EF9F27); border: none; color: #1a0e00; }

@@ -156,21 +156,19 @@
           <div class="skill-cost-label">⚡0</div>
           <div class="skill-tooltip"></div>
         </div>
-        <!-- 閃避 -->
-        <div class="skill-slot skill-slot-dash" id="skill-slot-space" data-skill="space">
-          <div class="skill-key">Space</div>
-          <div class="skill-name-label">閃避</div>
-          <div class="skill-cost-label">⚡1</div>
-          <div class="skill-tooltip"></div>
-        </div>
         <!-- 普通攻擊（手機按鈕） -->
         <button class="skill-atk-btn" id="skill-attack" data-skill="attack">攻<br><small>J/點擊</small></button>
       </div>
 
-      <!-- 虛擬搖桿（手機用） -->
-      <div id="joystick-zone">
-        <div id="joystick-base">
-          <div id="joystick-stick"></div>
+      <!-- 手機移動 + 跳/滾 觸控墊（桌機自動隱藏） -->
+      <div id="mobile-pad">
+        <div class="mb-move">
+          <button id="mb-left"  class="mb-btn">◀</button>
+          <button id="mb-right" class="mb-btn">▶</button>
+        </div>
+        <div class="mb-act">
+          <button id="mb-roll" class="mb-btn mb-roll">滾</button>
+          <button id="mb-jump" class="mb-btn mb-jump">跳</button>
         </div>
       </div>
 
