@@ -16,6 +16,7 @@ import { playBGM, playSFX } from './bgm.js';
 import { showDamageNumber, hitStop } from './combat.js';
 import { drawHero } from './sprites.js';
 import { updateFX, renderFXWorld, renderFlash, shakeOffset } from './fx.js';
+import { setStageTheme, updateAmbient, renderAmbient, renderVignette, getTheme } from './stagebg.js';
 
 // ── Canvas 設定 ──
 const canvas = document.getElementById('game-canvas');
@@ -456,6 +457,9 @@ function update(delta) {
   // 更新打擊特效（粒子/震屏/閃光）
   updateFX(delta);
 
+  // 更新場景環境粒子（火星/雪/孢子…）
+  updateAmbient(delta, canvas.width, canvas.height);
+
   // 檢查關卡清除
   checkStageClear();
 }
@@ -468,15 +472,16 @@ function render() {
   ctx.save();
   ctx.translate(so.x, so.y);
 
-  // 背景漸層（深淵）— 畫大一點避免震動時露邊
+  // 背景漸層（依章節主題）— 畫大一點避免震動時露邊
+  const theme = getTheme();
   const bgGrad = ctx.createRadialGradient(canvas.width/2, canvas.height*0.45, 0, canvas.width/2, canvas.height*0.45, Math.max(canvas.width,canvas.height)*0.85);
-  bgGrad.addColorStop(0, '#1a0f2e');
-  bgGrad.addColorStop(0.6, '#0c0718');
-  bgGrad.addColorStop(1, '#040208');
+  bgGrad.addColorStop(0, theme.bg[0]);
+  bgGrad.addColorStop(0.6, theme.bg[1]);
+  bgGrad.addColorStop(1, theme.bg[2]);
   ctx.fillStyle = bgGrad;
   ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40);
 
-  renderIsoFloor();
+  renderIsoFloor(theme);
 
   // 中心聚光燈（疊在地板上方，讓玩家周圍更亮）
   const cl = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 30, canvas.width/2, canvas.height/2, 360);
@@ -510,12 +515,17 @@ function render() {
 
   ctx.restore();           // 結束螢幕震動位移
 
-  // 命中閃光（不受震動影響，蓋全螢幕）
+  // 邊緣暗角/霧 + 環境粒子（螢幕座標氛圍層，不受震動影響）
+  renderVignette(ctx, canvas.width, canvas.height);
+  renderAmbient(ctx);
+
+  // 命中閃光（蓋全螢幕）
   renderFlash(ctx, canvas.width, canvas.height);
 }
 
-// ── 等距菱形地板 ──
-function renderIsoFloor() {
+// ── 等距菱形地板（依章節主題配色）──
+function renderIsoFloor(theme) {
+  const A = theme.floorA, B = theme.floorB;
   const G = 75; // 每格世界單位
   const cgx = Math.round(Game.camera.wx / G);
   const cgy = Math.round(Game.camera.wy / G);
@@ -531,8 +541,11 @@ function renderIsoFloor() {
 
       const hw = G * ISO.kx, hh = G * ISO.ky;
       const seed = ((gx * 73856093) ^ (gy * 19349663)) & 0xff;
-      const shade = 22 + (seed % 16);
-      ctx.fillStyle = `rgb(${shade + 14},${shade + 6},${shade + 28})`;
+      const m = (seed % 16) / 16;   // 0~1 隨機在 A、B 間取色
+      const r = Math.round(A[0] + (B[0] - A[0]) * m);
+      const g = Math.round(A[1] + (B[1] - A[1]) * m);
+      const b = Math.round(A[2] + (B[2] - A[2]) * m);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.beginPath();
       ctx.moveTo(c.x, c.y - hh);
       ctx.lineTo(c.x + hw, c.y);
@@ -540,7 +553,7 @@ function renderIsoFloor() {
       ctx.lineTo(c.x - hw, c.y);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = 'rgba(120,90,180,.14)';
+      ctx.strokeStyle = theme.line;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -677,6 +690,7 @@ function gameEnd(won) {
 export function loadNextStage() {
   Game.state = GameState.RUNNING;
   Game.enemies = [];
+  setStageTheme(Game.chapter);   // 切換該章節場景氛圍
   spawnEnemiesForStage(Game.chapter, Game.stage);
   playBGM(Game.stage % 5 === 0 ? `ch${Game.chapter}_boss` : `ch${Game.chapter}_explore`);
   updateHUD();
