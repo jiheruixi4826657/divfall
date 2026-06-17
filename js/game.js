@@ -32,7 +32,7 @@ export const GameState = {
 // ── 世界與等距投影設定 ──
 // 遊戲邏輯都跑在「俯視世界座標 (wx, wy)」，
 // 只有在繪製時才投影成 2.5D 斜角等距畫面（玩家永遠置中，世界在腳下捲動）
-const WORLD = { w: 1500, h: 1500 };   // 競技場大小（世界座標）
+const WORLD = { w: 2600, h: 2600 };   // 競技場大小（世界座標）
 const ISO   = { kx: 0.5, ky: 0.26 };  // 等距壓縮比例（2:1 斜角）
 
 // ── 全局遊戲物件 ──
@@ -50,6 +50,7 @@ export const Game = {
   // 時間
   lastTime: 0,
   delta:    0,           // 前一幀到這幀的秒數
+  freeze:   0,           // 打擊頓停剩餘秒數（>0 時暫停更新但持續繪製）
 
   // 輸入狀態
   input: {
@@ -104,9 +105,10 @@ export class Player {
     this.critR  = stats.critR;   // 暴擊率 0~1
     this.critM  = stats.critM;   // 暴擊倍率 (e.g. 1.8)
 
-    // 技能費用
-    this.maxCost = 3;
-    this.cost    = 3;
+    // 技能費用（會隨時間回復）
+    this.maxCost   = 6;
+    this.cost      = 6;
+    this._costTimer = 0;
 
     // 動畫
     this.facing  = 1;            // 1=右, -1=左
@@ -129,6 +131,16 @@ export class Player {
   update(delta) {
     this.move(delta);
     if (this.invincible > 0) this.invincible -= delta;
+
+    // 費用回復：每 1.1 秒回 1 點（上限 maxCost）
+    if (this.cost < this.maxCost) {
+      this._costTimer += delta;
+      if (this._costTimer >= 1.1) {
+        this._costTimer = 0;
+        this.cost = Math.min(this.maxCost, this.cost + 1);
+        updateHUD();
+      }
+    }
   }
 
   // 移動
@@ -363,7 +375,7 @@ export class Enemy {
   die() {
     this.alive = false;
     playSFX(this.isBoss ? 'boss_kill' : 'kill');
-    if (this.isBoss) onBossDefeated(this);
+    // 通關結算統一由 checkStageClear 處理（避免重複觸發）
   }
 
   // sx,sy = 螢幕上「腳底」位置（主迴圈投影後傳入）
@@ -489,7 +501,8 @@ function gameLoop(timestamp) {
   Game.lastTime = timestamp;
 
   if (Game.state === GameState.RUNNING || Game.state === GameState.BOSS) {
-    update(Game.delta);
+    if (Game.freeze > 0) Game.freeze -= Game.delta;   // 頓停：暫停更新但畫面照常
+    else update(Game.delta);
   }
   render();
 
@@ -612,54 +625,47 @@ function renderEffects(ctx) {
 }
 
 // ════════════════════════════════════════
-// 關卡清除判定
+// 關卡清除判定（每幀檢查，敵人全滅就結算）
 // ════════════════════════════════════════
+let _clearing = false;
 function checkStageClear() {
-  const allDead = Game.enemies.length > 0 && Game.enemies.every(e => !e.alive);
-  if (!allDead) return;
+  if (_clearing) return;
+  if (Game.state !== GameState.RUNNING && Game.state !== GameState.BOSS) return;
+  // 需要「曾經有敵人」且「全部死亡」
+  if (Game.enemies.length === 0 || !Game.enemies.every(e => !e.alive)) return;
 
+  _clearing = true;
+  const clearedBoss = (Game.stage % 5 === 0);  // 剛清掉的是不是 BOSS 關
   Game.enemies = [];
-  Game.stage++;
-
-  if (Game.stage % 5 === 0) {
-    // BOSS 擊敗後的特殊流程由 onBossDefeated 處理
-    return;
-  }
-
-  // 一般關卡清除
-  Game.state = GameState.PAUSED;
+  Game.state   = GameState.PAUSED;
   playSFX('card_pick');
-  saveRun({
-    cls: Game.class, chapter: Game.chapter, stage: Game.stage,
-    currentHP: Game.player.hp, gold: 0, deck: [], skills: {}
-  });
-  updateProgress(Game.chapter, Game.stage);
-  showCardChoice(() => {
-    // 卡牌選完後繼續下一關
-    loadNextStage();
-  });
-}
 
-// ════════════════════════════════════════
-// BOSS 擊敗
-// ════════════════════════════════════════
-async function onBossDefeated(boss) {
-  await onBossKill(boss.id);
-
-  if (Game.stage % 50 === 0) {
-    // 章節 BOSS
-    await onChapterClear();
-    if (Game.chapter >= 5) {
-      // 遊戲通關
-      gameEnd(true);
-      return;
+  (async () => {
+    // ── BOSS 結算：加天賦點、通關章節 ──
+    if (clearedBoss) {
+      try {
+        await onBossKill(`ch${Game.chapter}_s${Game.stage}`);
+        if (Game.stage % 50 === 0) {
+          await onChapterClear();
+          if (Game.chapter >= 5) { gameEnd(true); return; }
+          Game.chapter++;
+        }
+      } catch (e) { console.warn('[結算] BOSS 獎勵寫入失敗（可能未登入）', e.message); }
     }
-    Game.chapter++;
-  }
 
-  Game.state = GameState.PAUSED;
-  // 顯示5選2卡牌（BOSS獎勵）
-  showCardChoice(() => loadNextStage(), 5, 2);
+    // ── 進入下一關 ──
+    Game.stage++;
+    try {
+      await saveRun({ cls: Game.class, chapter: Game.chapter, stage: Game.stage,
+                      currentHP: Game.player.hp, gold: 0, deck: [] });
+      await updateProgress(Game.chapter, Game.stage);
+    } catch (e) { /* 未登入時略過雲端存檔，不影響遊玩 */ }
+
+    // 卡牌獎勵：BOSS 5選2，一般 3選1
+    const poolSize  = clearedBoss ? 5 : 3;
+    const pickCount = clearedBoss ? 2 : 1;
+    showCardChoice(() => { _clearing = false; loadNextStage(); }, poolSize, pickCount);
+  })();
 }
 
 // ════════════════════════════════════════
@@ -1027,8 +1033,8 @@ function updateHUD() {
 // ── 工具函數 ──
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
-// ── 掛載給其他模組存取 ──
-window.__GameFns = { startGame, pauseGame, resumeGame, updateHUD, Game };
+// ── 掛載給其他模組存取（_update / loadNextStage 供除錯與測試用）──
+window.__GameFns = { startGame, pauseGame, resumeGame, updateHUD, Game, loadNextStage, _update: update };
 
 // Hub 按鈕事件
 document.getElementById('btn-start-solo')?.addEventListener('click', () => {

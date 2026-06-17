@@ -71,18 +71,26 @@ export function performSkill(player, skillKey, enemies) {
   const skillDef = getSkillDef(player.cls, skillKey);
   if (!skillDef) return;
 
-  // 費用檢查
-  if (player.cost < skillDef.cost) return;
+  // 費用檢查（不足時給個提示，不要靜默無反應）
+  if (player.cost < skillDef.cost) {
+    const s = worldToScreen(player.x, player.y);
+    showDamageNumber(s.x, s.y - 80, '費用不足', false, false);
+    return;
+  }
   player.cost -= skillDef.cost;
   window.__GameFns?.updateHUD();
+
+  // 每次施法都在腳下閃一下，讓技能「看得見」
+  spawnEffect(player.x, player.y, 55, skillDef.color || '#ffffff', 0.25);
 
   // 依技能類型執行
   switch (skillDef.type) {
     case 'single': {
-      const target = findNearestEnemy(enemies, player.x, player.y, 300);
+      const target = findNearestEnemy(enemies, player.x, player.y, 320);
       if (!target) break;
       const { damage, isCrit } = calcDamage(player, target, skillDef.mult, skillDef.element);
       applyDamage(target, damage, isCrit);
+      spawnEffect(target.x, target.y, 50, skillDef.color || '#fff', 0.3);
       hitStop(0.05);
       playSFX('hit_medium');
       break;
@@ -163,8 +171,8 @@ export function showDamageNumber(x, y, value, isCrit = false, isHeal = false) {
 // Hit Stop（畫面頓停）
 // ════════════════════════════════════════
 export function hitStop(duration) {
-  pauseGame();
-  setTimeout(() => resumeGame(), duration * 1000);
+  // 用 Game.freeze 做時間式頓停，避免與「卡牌選擇暫停」搶 Game.state
+  Game.freeze = Math.max(Game.freeze || 0, duration);
 }
 
 // ════════════════════════════════════════
